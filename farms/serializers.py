@@ -66,14 +66,52 @@ class PlantingMethodSerializer(serializers.ModelSerializer):
 
 class CropTypeSerializer(serializers.ModelSerializer):
     # Plantation type and planting method are now CharField with choices
-    plantation_type_display = serializers.CharField(source='get_plantation_type_display', read_only=True)
-    planting_method_display = serializers.CharField(source='get_planting_method_display', read_only=True)
+    plantation_type_display = serializers.SerializerMethodField()
+    planting_method_display = serializers.SerializerMethodField()
     plantation_date = serializers.SerializerMethodField()
     industry_name = serializers.CharField(source='industry.name', read_only=True)
+    crop_category = serializers.ChoiceField(choices=CropType.CROP_CATEGORY_CHOICES)
+    plantation_type_choices = serializers.SerializerMethodField()
+    planting_method_choices = serializers.SerializerMethodField()
     
     class Meta:
         model = CropType
-        fields = ['id', 'crop_type', 'industry', 'industry_name', 'plantation_type', 'plantation_type_display', 'planting_method', 'planting_method_display', 'plantation_date']
+        fields = [
+            'id', 'crop_category', 'industry', 'industry_name', 
+            'plantation_type', 'plantation_type_display', 'plantation_type_choices',
+            'planting_method', 'planting_method_display', 'planting_method_choices',
+            'plantation_date', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at']
+    
+    def get_plantation_type_display(self, obj):
+        """Get human-readable plantation type based on crop category"""
+        if not obj.plantation_type:
+            return None
+        choices = obj.get_plantation_type_choices()
+        choices_dict = dict(choices)
+        return choices_dict.get(obj.plantation_type, obj.plantation_type)
+    
+    def get_planting_method_display(self, obj):
+        """Get human-readable planting method"""
+        if not obj.planting_method:
+            return None
+        if obj.crop_category == 'sugarcane':
+            choices_dict = dict(CropType.SUGARCANE_PLANTATION_METHOD_CHOICES)
+            return choices_dict.get(obj.planting_method, obj.planting_method)
+        return None
+    
+    def get_plantation_type_choices(self, obj):
+        """Return available plantation type choices for the crop category"""
+        return obj.get_plantation_type_choices() if obj.pk else CropType.get_plantation_type_choices_for_category(
+            self.initial_data.get('crop_category', 'sugarcane') if hasattr(self, 'initial_data') else 'sugarcane'
+        )
+    
+    def get_planting_method_choices(self, obj):
+        """Return available planting method choices for the crop category"""
+        return obj.get_planting_method_choices() if obj.pk else CropType.get_planting_method_choices_for_category(
+            self.initial_data.get('crop_category', 'sugarcane') if hasattr(self, 'initial_data') else 'sugarcane'
+        )
     
     def get_plantation_date(self, obj):
         # Get plantation_date from the parent Farm instance passed through context
@@ -81,6 +119,36 @@ class CropTypeSerializer(serializers.ModelSerializer):
         if farm and hasattr(farm, 'plantation_date'):
             return farm.plantation_date.isoformat() if farm.plantation_date else None
         return None
+    
+    def validate(self, data):
+        """Validate plantation_type and planting_method based on crop_category"""
+        crop_category = data.get('crop_category', self.instance.crop_category if self.instance else 'sugarcane')
+        plantation_type = data.get('plantation_type')
+        planting_method = data.get('planting_method')
+        
+        # Validate plantation_type
+        if plantation_type:
+            valid_choices = CropType.get_plantation_type_choices_for_category(crop_category)
+            valid_values = [choice[0] for choice in valid_choices]
+            if plantation_type not in valid_values:
+                raise serializers.ValidationError({
+                    'plantation_type': f'Invalid plantation type for {crop_category}. Valid choices: {[c[1] for c in valid_choices]}'
+                })
+        
+        # Validate planting_method (only for sugarcane)
+        if planting_method:
+            if crop_category != 'sugarcane':
+                raise serializers.ValidationError({
+                    'planting_method': f'Planting method is only applicable for sugarcane crops'
+                })
+            valid_choices = CropType.get_planting_method_choices_for_category(crop_category)
+            valid_values = [choice[0] for choice in valid_choices]
+            if planting_method not in valid_values:
+                raise serializers.ValidationError({
+                    'planting_method': f'Invalid planting method. Valid choices: {[c[1] for c in valid_choices]}'
+                })
+        
+        return data
 
 
 class PlotSerializer(serializers.ModelSerializer):

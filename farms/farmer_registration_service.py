@@ -361,7 +361,7 @@ class CompleteFarmerRegistrationService:
                 crop_type = CropType.objects.get(id=farm_data['crop_type_id'])
             except CropType.DoesNotExist:
                 raise serializers.ValidationError(f"Crop type ID {farm_data['crop_type_id']} not found")
-        elif farm_data.get('crop_type_name'):
+        elif farm_data.get('crop_category') or farm_data.get('crop_type_name'):
             # Get plantation_type and planting_method as strings (choice values)
             # Support both direct string values and backward compatibility with IDs
             plantation_type_str = farm_data.get('plantation_type') or ''
@@ -413,21 +413,71 @@ class CompleteFarmerRegistrationService:
                 'other': 'other',
             }
             
-            # Normalize plantation_type
+            # Determine crop_category from farm_data first (before normalization)
+            crop_category = farm_data.get('crop_category', 'sugarcane')
+            # Backward compatibility: if crop_type_name is provided, try to infer category
+            if not crop_category and farm_data.get('crop_type_name'):
+                crop_type_name_lower = farm_data['crop_type_name'].lower()
+                if 'grapes' in crop_type_name_lower or 'grape' in crop_type_name_lower:
+                    crop_category = 'grapes'
+                else:
+                    crop_category = 'sugarcane'
+            
+            if crop_category not in ['sugarcane', 'grapes']:
+                crop_category = 'sugarcane'  # Default to sugarcane if invalid
+            
+            # Normalize plantation_type based on crop_category
             if plantation_type_str:
                 plantation_type_str = str(plantation_type_str).lower().strip()
-                plantation_type_str = plantation_type_mapping.get(plantation_type_str, plantation_type_str)
-                # Validate against choices
-                valid_plantation_types = ['adsali', 'suru', 'ratoon', 'pre-seasonal', 'pre_seasonal', 'post-seasonal', 'other']
-                if plantation_type_str not in valid_plantation_types:
-                    logger.warning(f"Invalid plantation_type '{plantation_type_str}', defaulting to 'other'")
-                    plantation_type_str = 'other'
+                
+                if crop_category == 'sugarcane':
+                    # Sugarcane plantation type mapping
+                    plantation_type_mapping = {
+                        'adsali': 'adsali',
+                        'suru': 'suru',
+                        'ratoon': 'ratoon',
+                        'pre-seasonal': 'pre-seasonal',
+                        'pre_seasonal': 'pre_seasonal',
+                        'post-seasonal': 'post-seasonal',
+                        'post_seasonal': 'post-seasonal',
+                    }
+                    plantation_type_str = plantation_type_mapping.get(plantation_type_str, plantation_type_str)
+                    # Validate against sugarcane choices
+                    valid_plantation_types = ['adsali', 'suru', 'ratoon', 'pre-seasonal', 'pre_seasonal', 'post-seasonal', 'other']
+                    if plantation_type_str not in valid_plantation_types:
+                        logger.warning(f"Invalid plantation_type '{plantation_type_str}' for sugarcane, defaulting to 'other'")
+                        plantation_type_str = 'other'
+                elif crop_category == 'grapes':
+                    # Grapes plantation type mapping
+                    grapes_type_mapping = {
+                        'wine': 'wine',
+                        'table': 'table',
+                        'late': 'late',
+                        'early': 'early',
+                        'pre_season': 'pre_season',
+                        'pre-season': 'pre_season',
+                        'seasonal': 'seasonal',
+                    }
+                    plantation_type_str = grapes_type_mapping.get(plantation_type_str, plantation_type_str)
+                    # Validate against grapes choices
+                    valid_plantation_types = ['wine', 'table', 'late', 'early', 'pre_season', 'seasonal']
+                    if plantation_type_str not in valid_plantation_types:
+                        logger.warning(f"Invalid plantation_type '{plantation_type_str}' for grapes, defaulting to 'seasonal'")
+                        plantation_type_str = 'seasonal'
             else:
                 plantation_type_str = ''  # Empty string for blank=True CharField
             
-            # Normalize planting_method
-            if planting_method_str:
+            # Normalize planting_method (only for sugarcane)
+            if planting_method_str and crop_category == 'sugarcane':
                 planting_method_str = str(planting_method_str).lower().strip()
+                planting_method_mapping = {
+                    '3_bud': '3_bud',
+                    '2_bud': '2_bud',
+                    '1_bud': '1_bud',
+                    '1_bud_stip_method': '1_bud_stip_Method',
+                    '1_bud_stip_Method': '1_bud_stip_Method',
+                    'other': 'other',
+                }
                 planting_method_str = planting_method_mapping.get(planting_method_str, planting_method_str)
                 # Validate against choices
                 valid_planting_methods = ['3_bud', '2_bud', '1_bud', '1_bud_stip_Method', 'other']
@@ -435,47 +485,24 @@ class CompleteFarmerRegistrationService:
                     logger.warning(f"Invalid planting_method '{planting_method_str}', defaulting to 'other'")
                     planting_method_str = 'other'
             else:
-                planting_method_str = ''  # Empty string for blank=True CharField
+                planting_method_str = ''  # Empty string for grapes or blank
             
-            logger.info(f"Final normalized values - plantation_type: '{plantation_type_str}', planting_method: '{planting_method_str}'")
-            
-            # Find or create CropType that matches BOTH crop name AND plantation data
-            crop_type_name = farm_data['crop_type_name']
-            
-            # Determine crop_category from crop_type_name (case-insensitive)
-            crop_category = 'sugarcane'  # default
-            crop_type_name_lower = crop_type_name.lower() if crop_type_name else ''
-            if 'grapes' in crop_type_name_lower or 'grape' in crop_type_name_lower:
-                crop_category = 'grapes'
-            elif 'wheat' in crop_type_name_lower:
-                crop_category = 'wheat'
-            elif 'rice' in crop_type_name_lower:
-                crop_category = 'rice'
-            elif farm_data.get('crop_category'):
-                crop_category = farm_data.get('crop_category')
+            logger.info(f"Final normalized values - crop_category: '{crop_category}', plantation_type: '{plantation_type_str}', planting_method: '{planting_method_str}'")
             
             # Get industry from field officer
             industry = get_user_industry(field_officer) if field_officer else None
             
-            # Use get_or_create with all fields to ensure uniqueness (including industry)
+            # Use get_or_create with crop_category and plantation data
             crop_type, created = CropType.objects.get_or_create(
-                crop_type=crop_type_name,
+                crop_category=crop_category,
                 plantation_type=plantation_type_str if plantation_type_str else '',
                 planting_method=planting_method_str if planting_method_str else '',
                 industry=industry,
-                defaults={'crop_category': crop_category}
+                defaults={}
             )
             
-            # Update crop_category if it was not set or needs updating
-            if not created and crop_type.crop_category != crop_category:
-                crop_type.crop_category = crop_category
-                crop_type.save()
-                logger.info(f"Updated CropType '{crop_type_name}' crop_category to '{crop_category}'")
-            
-            if created:
-                logger.info(f"Created CropType '{crop_type_name}' with plantation_type={plantation_type_str}, planting_method={planting_method_str}, industry={industry}")
-            else:
-                # Ensure plantation data and industry are set (in case they were None before)
+            # Update plantation data if needed
+            if not created:
                 needs_update = False
                 if crop_type.plantation_type != plantation_type_str or crop_type.planting_method != planting_method_str:
                     crop_type.plantation_type = plantation_type_str if plantation_type_str else ''
@@ -486,7 +513,10 @@ class CompleteFarmerRegistrationService:
                     needs_update = True
                 if needs_update:
                     crop_type.save()
-                    logger.info(f"Updated CropType '{crop_type_name}' with plantation data and industry")
+                    logger.info(f"Updated CropType crop_category='{crop_category}' with plantation data and industry")
+            
+            if created:
+                logger.info(f"Created CropType crop_category='{crop_category}' with plantation_type={plantation_type_str}, planting_method={planting_method_str}, industry={industry}")
         
         # Parse plantation_date if provided
         plantation_date = None

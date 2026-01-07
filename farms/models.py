@@ -51,7 +51,7 @@ class PlantationType(models.Model):
         ordering = ['name']
 
     def __str__(self):
-        crop_name = self.crop_type.crop_type if self.crop_type else "No Crop"
+        crop_name = self.crop_type.get_crop_category_display() if self.crop_type else "No Crop"
         industry_name = self.industry.name if self.industry else "Global"
         return f"{self.name} ({crop_name} - {industry_name})"
 
@@ -101,15 +101,15 @@ class CropType(models.Model):
     """
     Crop types (e.g., Sugarcane, Wheat, Rice, etc.)
     Uses CharField with choices for plantation_type and planting_method
+    Different crop categories have different plantation type and method choices
     """
     CROP_CATEGORY_CHOICES = [
         ('sugarcane', 'Sugarcane'),
         ('grapes', 'Grapes'),
-        ('wheat', 'Wheat'),
-        ('rice', 'Rice'),
-        ('other', 'Other'),
     ]
-    PLANTATION_TYPE_CHOICES = [
+    
+    # Sugarcane plantation type choices
+    SUGARCANE_PLANTATION_TYPE_CHOICES = [
         ('adsali',         'Adsali'),
         ('suru',           'Suru'),
         ('ratoon',         'Ratoon'),
@@ -118,13 +118,29 @@ class CropType(models.Model):
         ('pre_seasonal',   'Pre-Seasonal'),  # Alternative spelling
         ('other',          'Other'),
     ]
-    PLANTATION_METHOD_CHOICES = [
+    
+    # Grapes plantation type choices
+    GRAPES_PLANTATION_TYPE_CHOICES = [
+        ('wine',           'Wine Grapes'),
+        ('table',          'Table Grapes'),
+        ('late',           'Late'),
+        ('early',          'Early'),
+        ('pre_season',     'Pre-Season'),
+        ('seasonal',       'Seasonal'),
+    ]
+    
+    # Sugarcane planting method choices
+    SUGARCANE_PLANTATION_METHOD_CHOICES = [
         ('3_bud',           '3 Bud Method'),
         ('2_bud',           '2 Bud Method'),
         ('1_bud',           '1 Bud Method'),
         ('1_bud_stip_Method','1 Bud (stip Method)'),
         ('other',           'Other'),
     ]
+    
+    # Legacy choices for backward compatibility
+    PLANTATION_TYPE_CHOICES = SUGARCANE_PLANTATION_TYPE_CHOICES
+    PLANTATION_METHOD_CHOICES = SUGARCANE_PLANTATION_METHOD_CHOICES
 
     # Multi-tenant: Industry association
     industry = models.ForeignKey(
@@ -135,11 +151,6 @@ class CropType(models.Model):
         related_name='crop_types',
         help_text="Industry this crop type belongs to"
     )
-    crop_type = models.CharField(
-        max_length=100,
-        blank=True,
-        help_text="Name of the crop type"
-    )
     crop_category = models.CharField(
         max_length=50,
         choices=CROP_CATEGORY_CHOICES,
@@ -148,26 +159,59 @@ class CropType(models.Model):
     )
     plantation_type = models.CharField(
         max_length=100,
-        choices=PLANTATION_TYPE_CHOICES,
         blank=True,
-        help_text="Plantation type for this crop"
+        help_text="Plantation type for this crop (choices depend on crop category)"
     )
     planting_method = models.CharField(
         max_length=100,
-        choices=PLANTATION_METHOD_CHOICES,
         blank=True,
-        help_text="Planting method for this crop"
+        null=True,
+        help_text="Planting method for this crop (only for sugarcane)"
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['crop_type']
+        ordering = ['crop_category']
         verbose_name = 'Crop Type'
         verbose_name_plural = 'Crop Types'
 
     def __str__(self):
-        return self.crop_type or "Unnamed CropType"
+        return self.get_crop_category_display() or "Unnamed CropType"
+    
+    def get_plantation_type_choices(self):
+        """Get plantation type choices based on crop category"""
+        if self.crop_category == 'grapes':
+            return self.GRAPES_PLANTATION_TYPE_CHOICES
+        elif self.crop_category == 'sugarcane':
+            return self.SUGARCANE_PLANTATION_TYPE_CHOICES
+        else:
+            return self.SUGARCANE_PLANTATION_TYPE_CHOICES  # Default to sugarcane
+    
+    def get_planting_method_choices(self):
+        """Get planting method choices based on crop category"""
+        if self.crop_category == 'sugarcane':
+            return self.SUGARCANE_PLANTATION_METHOD_CHOICES
+        else:
+            return []  # No planting method for grapes and other crops
+    
+    @classmethod
+    def get_plantation_type_choices_for_category(cls, crop_category):
+        """Get plantation type choices for a given crop category"""
+        if crop_category == 'grapes':
+            return cls.GRAPES_PLANTATION_TYPE_CHOICES
+        elif crop_category == 'sugarcane':
+            return cls.SUGARCANE_PLANTATION_TYPE_CHOICES
+        else:
+            return cls.SUGARCANE_PLANTATION_TYPE_CHOICES
+    
+    @classmethod
+    def get_planting_method_choices_for_category(cls, crop_category):
+        """Get planting method choices for a given crop category"""
+        if crop_category == 'sugarcane':
+            return cls.SUGARCANE_PLANTATION_METHOD_CHOICES
+        else:
+            return []
 
 
 class IrrigationType(models.Model):

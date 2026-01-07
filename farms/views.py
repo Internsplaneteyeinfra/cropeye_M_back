@@ -322,7 +322,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                             'address': farm.address,
                             'area_size': str(farm.area_size),
                             'soil_type': farm.soil_type.name if farm.soil_type else None,
-                            'crop_type': farm.crop_type.crop_type if farm.crop_type else None,
+                            'crop_type': farm.crop_type.get_crop_category_display() if farm.crop_type else None,
                             'plantation_type': plantation_type_name,
                             'planting_method': planting_method_name,
                             'plantation_date': farm.plantation_date.isoformat() if farm.plantation_date else None,
@@ -775,7 +775,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                             'address': farm.address,
                             'area_size': str(farm.area_size) if farm.area_size else None,
                             'soil_type': farm.soil_type.name if farm.soil_type else None,
-                            'crop_type': farm.crop_type.crop_type if farm.crop_type else None,
+                            'crop_type': farm.crop_type.get_crop_category_display() if farm.crop_type else None,
                             'plantation_type': farm.crop_type.get_plantation_type_display() if farm.crop_type and farm.crop_type.plantation_type else None,
                             'planting_method': farm.crop_type.get_planting_method_display() if farm.crop_type and farm.crop_type.planting_method else None,
                             'created_at': farm.created_at.strftime('%Y-%m-%d %H:%M:%S') if farm.created_at else None,
@@ -868,8 +868,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                     total_farms += 1
 
                     # Collect statistics
-                    if farm.crop_type and farm.crop_type.crop_type:
-                        crop_types.add(farm.crop_type.crop_type)
+                    if farm.crop_type and farm.crop_type.crop_category:
+                        crop_types.add(farm.crop_type.get_crop_category_display())
                     if farm.crop_type and farm.crop_type.plantation_type:
                         plantation_types.add(farm.crop_type.get_plantation_type_display())
 
@@ -923,7 +923,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                         } if farm.soil_type else None,
                         'crop_type': {
                             'id': farm.crop_type.id,
-                            'crop_type': farm.crop_type.crop_type,
+                            'crop_category': farm.crop_type.crop_category,
+                            'crop_category_display': farm.crop_type.get_crop_category_display(),
                             'plantation_type': farm.crop_type.plantation_type,
                             'plantation_type_display': farm.crop_type.get_plantation_type_display() if farm.crop_type.plantation_type else None,
                             'planting_method': farm.crop_type.planting_method,
@@ -1370,7 +1371,7 @@ def get_crop_fields_config(request):
                 'flow_rate_liter_per_hour', 'emitters_per_plant'
             ],
             'hidden_fields': [
-                'spacing_a', 'spacing_b', 'plantation_type', 'planting_method'
+                'spacing_a', 'spacing_b', 'planting_method'
             ],
             'visible_fields': [
                 'address', 'area_size', 'soil_type', 'crop_type',
@@ -1387,4 +1388,32 @@ def get_crop_fields_config(request):
     return Response({
         'crop_category': crop_category,
         'field_config': config
+    })
+
+
+@api_view(['GET'])
+def get_crop_type_choices(request):
+    """
+    Returns plantation type and planting method choices based on crop category.
+    Used by frontend to populate dropdowns dynamically.
+    
+    Query params:
+        crop_category: 'sugarcane', 'grapes', etc. (required)
+    """
+    crop_category = request.query_params.get('crop_category')
+    
+    if not crop_category:
+        return Response({
+            'error': 'crop_category parameter is required'
+        }, status=400)
+    
+    # Get choices from CropType model
+    plantation_type_choices = CropType.get_plantation_type_choices_for_category(crop_category)
+    planting_method_choices = CropType.get_planting_method_choices_for_category(crop_category)
+    
+    return Response({
+        'crop_category': crop_category,
+        'plantation_type_choices': plantation_type_choices,
+        'planting_method_choices': planting_method_choices,
+        'has_planting_method': len(planting_method_choices) > 0
     })
