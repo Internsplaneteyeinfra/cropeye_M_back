@@ -1,0 +1,3727 @@
+# users apis
+ 
+  🔐 Authentication
+
+  1.  Get JWT Token 
+
+ 
+curl -X POST http://localhost:8000/api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "your_username", "password": "your_password"}'
+ 
+> Response will include `access` and `refresh` tokens.
+
+  2.  Refresh JWT Token 
+
+ 
+curl -X POST http://localhost:8000/api/token/refresh/ \
+  -H "Content-Type: application/json" \
+  -d '{"refresh": "your_refresh_token"}'
+ 
+ 
+  👤 User Management Endpoints
+
+  3.  List All Users 
+
+ 
+curl -X GET http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer your_access_token"
+ 
+  4.  Create New User 
+
+ 
+curl -X POST http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "username": "newuser",
+        "password": "Password123!",
+        "password2": "Password123!",
+        "email": "newuser@example.com",
+        "first_name": "New",
+        "last_name": "User",
+        "role": "farmer",
+        "phone_number": "1234567890",
+        "address": "Some Address"
+      }'
+ 
+  5.  Retrieve User by ID 
+
+ 
+curl -X GET http://localhost:8000/api/users/5/ \
+  -H "Authorization: Bearer your_access_token"
+ 
+  6.  Update User by ID \
+
+ 
+curl -X PUT http://localhost:8000/api/users/5/ \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "email": "updated@example.com",
+        "first_name": "Updated",
+        "last_name": "User",
+        "phone_number": "9876543210",
+        "address": "New Address"
+      }'
+ 
+  7.  Delete User 
+
+ 
+curl -X DELETE http://localhost:8000/api/users/5/ \
+  -H "Authorization: Bearer your_access_token"
+ 
+  8.  Get Current Logged-in User 
+
+ 
+curl -X GET http://localhost:8000/api/users/me/ \
+  -H "Authorization: Bearer your_access_token"
+ 
+ 
+  🔐 OTP Endpoints (if implemented in `UserViewSet`)
+
+  9.  Send OTP 
+
+ 
+curl -X POST http://localhost:8000/api/otp/ \
+  -H "Content-Type: application/json" \
+  -d '{"email": "farmer1@example.com"}'
+ 
+  10.  Verify OTP 
+
+ 
+curl -X POST http://localhost:8000/api/verify-otp/ \
+  -H "Content-Type: application/json" \
+  -d '{"email": "farmer1@example.com", "otp": "123456"}'
+ 
+ 
+🔐 Step 1: Authenticate as Field Officer
+
+curl -X POST http://localhost:8000/api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "fieldofficer1",
+    "password": "yourpassword"
+}'
+Response:
+
+
+{
+  "access": "your_access_token",
+  "refresh": "your_refresh_token"
+}
+Save the access token.
+
+👤 Step 2: Try to Create a Farmer
+
+curl -X POST http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+  "username": "shuta",
+  "email": "shuta@example.com",
+  "password": "SecurePass@123",
+  "first_name": "shuta",
+  "last_name": "Patil",
+  "role_id": 2,
+  "phone_number": "9876543210",
+  "address": "Maliwadi",
+  "village": "Rajapur",
+  "taluka": "Karjat",
+  "district": "Ahmednagar",
+  "state": "Maharashtra"
+}
+'
+Expected Result:
+
+json
+
+{
+  "id": 12,
+  "username": "newfarmer1",
+  "email": "farmer1@example.com",
+  ...
+  "role": "farmer"
+}
+✅ Success! Field officer can add a farmer.
+
+❌ Step 3: Try to Create a Non-Farmer (e.g. Agronomist)
+
+curl -X POST http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer your_access_token" \
+  -H "Content-Type: application/json" \
+  -d '{
+  "username": "shuta",
+  "email": "shuta@example.com",
+  "password": "SecurePass@123",
+  "first_name": "shuta",
+  "last_name": "Patil",
+  "role_id": 2,
+  "phone_number": "9876543210",
+  "address": "Maliwadi",
+  "village": "Rajapur",
+  "taluka": "Karjat",
+  "district": "Ahmednagar",
+  "state": "Maharashtra"
+}
+'
+Expected Result (403 or 400 error):
+
+
+{
+  "role": [
+    "Invalid role. Allowed roles: farmer"
+  ]
+}
+
+✅ This is the correct behavior — field officers are restricted to creating only farmers.
+
+🔁 Step 4: List Users (Optional - Only for Admins or High Privilege)
+If the field officer attempts:
+
+
+curl -X GET http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer your_access_token"
+They may receive a 403 Forbidden, depending on your UserViewSet permission setting
+
+
+farm api: 
+
+---
+
+  🔐 Authentication
+
+All endpoints require authentication (`IsAuthenticated`). Use a token or session-based auth.
+
+Example using token:
+
+```bash
+-H "Authorization: Token <your_token_here>"
+```
+
+---
+
+  🌾 NEW: Auto-Assignment System for Field Officers
+
+**IMPORTANT UPDATE**: The system now automatically assigns the most recently created farmer to new plots and farms when created by field officers. This eliminates the need for manual farmer ID assignment in the enrollment workflow.
+
+**Auto-Assignment Workflow**:
+1. Field Officer creates Farmer via `/users/`
+2. Field Officer creates Plot via `/plots/` → **Auto-assigns to recent farmer**
+3. Field Officer creates Farm via `/farms/` → **Auto-assigns to recent farmer**
+
+**Time Window**: 30 minutes (with fallback to farmers created today)
+**Permissions**: Only field officers with `role='fieldofficer'` can trigger auto-assignment
+
+---
+
+  📦 API Endpoints & Parameters
+
+---
+
+   0. Helper: Recent Farmers (Field Officers Only)
+
+```bash
+GET /farms/recent-farmers/
+```
+
+**Purpose**: Get recent farmers created by the current field officer with detailed plot information including IDs, GPS coordinates, and polygon boundaries.
+
+**Enhanced Response** (now includes complete plot details):
+```json
+{
+  "most_recent_farmer": {
+    "id": 45,
+    "username": "farmer123",
+    "email": "farmer@example.com",
+    "first_name": "John",
+    "last_name": "Doe",
+    "phone_number": "9876543210",
+    "address": "Farm Address",
+    "village": "Sample Village",
+    "district": "Sample District",
+    "state": "Maharashtra",
+    "taluka": "Sample Taluka",
+    "date_joined": "2024-01-15T10:30:00Z",
+    "role": {
+      "id": 3,
+      "name": "farmer",
+      "display_name": "Farmer"
+    },
+    "plots_count": 2,
+    "plots": [
+      {
+        "id": 35,
+        "fastapi_plot_id": "GAT003_PLOT003",
+        "gat_number": "GAT003",
+        "plot_number": "PLOT003",
+        "village": "Rajapur",
+        "taluka": "Karjat",
+        "district": "Ahmednagar",
+        "state": "Maharashtra",
+        "country": "India",
+        "pin_code": "422605",
+        "location": {
+          "type": "Point",
+          "coordinates": [74.215000, 19.567000]
+        },
+        "boundary": {
+          "type": "Polygon",
+          "coordinates": [[[74.214, 19.566], [74.216, 19.566], [74.216, 19.568], [74.214, 19.568], [74.214, 19.566]]]
+        },
+        "created_at": "2024-01-15T10:30:00Z",
+        "updated_at": "2024-01-15T10:30:00Z",
+        "farms_count": 1,
+        "farms": [
+          {
+            "farm_uid": "2dbe327b-4c1a-4f2b-8c3d-123456789abc",
+            "address": "Farm Address, Village",
+            "area_size": "10.75",
+            "soil_type": "Loamy",
+            "crop_type": "Sugarcane",
+            "plantation_type": "Adsali",
+            "planting_method": "3 Bud Method",
+            "created_at": "2024-01-15T10:30:00Z",
+            "irrigations_count": 1,
+            "irrigations": [
+              {
+                "irrigation_type": "Drip Irrigation",
+                "irrigation_source": "Well",
+                "installation_date": "2024-01-01",
+                "status": true,
+                "motor_horsepower": 5.0,
+                "pipe_width_inches": 2.5,
+                "flow_rate_lph": 100.0,
+                "plants_per_acre": 1500
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": 37,
+        "fastapi_plot_id": "TEST001_TESTPLOT001",
+        "gat_number": "TEST001",
+        "plot_number": "TESTPLOT001",
+        "village": "TestVillage",
+        "taluka": "TestTaluka",
+        "district": "TestDistrict",
+        "state": "Maharashtra",
+        "country": "India",
+        "pin_code": "411001",
+        "location": {
+          "type": "Point",
+          "coordinates": [73.855294, 18.519560]
+        },
+        "boundary": {
+          "type": "Polygon",
+          "coordinates": [[[73.854, 18.519], [73.856, 18.519], [73.856, 18.520], [73.854, 18.520], [73.854, 18.519]]]
+        },
+        "created_at": "2024-01-15T11:00:00Z",
+        "updated_at": "2024-01-15T11:00:00Z",
+        "farms_count": 1,
+        "farms": [
+          {
+            "farm_uid": "3abc456d-7e8f-9012-3456-789abcdef012",
+            "address": "Another Farm Address, TestVillage",
+            "area_size": "5.25",
+            "soil_type": "Clay",
+            "crop_type": "Rice",
+            "plantation_type": "Pre-Seasonal",
+            "planting_method": "2 Bud Method",
+            "created_at": "2024-01-15T11:00:00Z",
+            "irrigations_count": 1,
+            "irrigations": [
+              {
+                "irrigation_type": "Sprinkler Irrigation",
+                "irrigation_source": "Canal",
+                "installation_date": "2024-01-15",
+                "status": true,
+                "motor_horsepower": 3.0,
+                "pipe_width_inches": 3.0,
+                "flow_rate_lph": 150.0,
+                "plants_per_acre": 2000
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "farmers_today": [
+    {
+      "id": 45,
+      "username": "farmer123",
+      "email": "farmer@example.com",
+      "first_name": "John",
+      "last_name": "Doe",
+      "phone_number": "9876543210",
+      "village": "Sample Village",
+      "district": "Sample District",
+      "plots_count": 2,
+      "plots": [
+        // Same plot structure as above
+      ]
+    }
+  ],
+  "count": 1
+}
+```
+
+**Enhanced Features**:
+- ✅ **Plot IDs**: Each plot includes unique database ID (`id`) 
+- ✅ **FastAPI Plot IDs**: Same plot IDs used by all FastAPI services (`fastapi_plot_id`)
+- ✅ **GPS Coordinates**: Exact latitude/longitude in GeoJSON Point format
+- ✅ **Polygon Boundaries**: Complete boundary coordinates in GeoJSON Polygon format
+- ✅ **Complete Address**: Village, taluka, district, state, country, PIN code
+- ✅ **Farmer Details**: Full contact information and address
+- ✅ **Plot Count**: Number of plots owned by each farmer
+- ✅ **Farm Details**: Complete farm information for each plot
+- ✅ **Agricultural Data**: Crop type, plantation type, planting method
+- ✅ **Irrigation Systems**: Complete irrigation details and specifications
+- ✅ **Timestamps**: Creation and update dates for plots and farms
+
+**🌾 Agricultural Information Included**:
+- **Crop Type**: Type of crop grown (e.g., Sugarcane, Rice, Wheat)
+- **Plantation Type**: Seasonal classification (Adsali, Suru, Ratoon, Pre-Seasonal, Post-Seasonal)
+- **Planting Method**: Cultivation technique (3 Bud Method, 2 Bud Method, 1 Bud Method, etc.)
+- **Soil Type**: Soil classification (Loamy, Clay, Sandy, etc.)
+- **Farm Area**: Size in acres
+- **Installation Date**: When irrigation was installed (plantation date reference)
+
+**💧 Irrigation System Details**:
+- **Irrigation Type**: Method (Drip, Sprinkler, Flood, Center Pivot, Manual)
+- **Water Source**: Source of water (Well, Canal, River, Borewell)
+- **Technical Specs**: Motor horsepower, pipe width, flow rate, plant density
+- **Status**: Active/Inactive irrigation systems
+- **Installation Date**: When the irrigation system was installed
+
+**🔗 FastAPI Integration**:
+- The `fastapi_plot_id` field uses the format `"GAT_NUMBER_PLOT_NUMBER"`
+- These IDs match exactly with all FastAPI services (Admin.py, ET.py, field.py, main.py, events.py)
+- Use `fastapi_plot_id` when calling FastAPI analysis services
+- Use `id` for Django database operations
+
+**Access**: Field officers only (403 error for other roles)
+
+**Example Request**:
+```bash
+# Get authentication token first
+curl -X POST http://localhost:8000/api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "field_officer_username", "password": "your_password"}'
+
+# Use the token to get recent farmers with plot details
+curl -X GET http://localhost:8000/api/farms/recent-farmers/ \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+**Use Cases**:
+- 📍 **Plot Mapping**: Use GPS coordinates and boundaries for GIS applications
+- 🗺️ **Location Visualization**: Display farmer plots on maps with farm details
+- 📊 **Agricultural Analysis**: Analyze crop patterns, plantation methods, and irrigation efficiency
+- 🌾 **Farm Management**: Complete agricultural data for farm planning and monitoring
+- 💧 **Irrigation Planning**: Assess irrigation systems and water management
+- 🔗 **Integration**: Link farmer data with spatial analysis services using FastAPI plot IDs
+- 📱 **Mobile Apps**: Comprehensive farmer and farm data for field officers
+- 📈 **Reporting**: Generate detailed reports with agricultural and irrigation data
+- 🎯 **Decision Making**: Support agricultural decisions with complete farm information
+
+### Farmer Profile API - Get My Complete Agricultural Data
+
+**Endpoint**: `GET /api/farms/my-profile/`
+
+```bash
+GET /farms/my-profile/
+```
+
+**Purpose**: Complete farmer profile API for farmers to fetch all their agricultural data when they log in, including personal details, plots with FastAPI IDs, farm details, and irrigation systems.
+
+**Authentication**: Farmer role required (403 error for other roles)
+
+**Enhanced Response** (Complete farmer agricultural profile):
+```json
+{
+  "success": true,
+  "farmer_profile": {
+    "id": 58,
+    "username": "faxokew458",
+    "email": "demo222@gmail.com",
+    "first_name": "OMRAM",
+    "last_name": "Thakur",
+    "phone_number": "9123456874",
+    "address": "Farm Address",
+    "village": "Shirdi",
+    "district": "Ahmedabad",
+    "state": "Maharashtra",
+    "taluka": "Sample Taluka",
+    "date_joined": "2024-01-15T10:30:00Z",
+    "last_login": "2024-01-16T08:15:00Z",
+    "role": {
+      "id": 3,
+      "name": "farmer",
+      "display_name": "Farmer"
+    }
+  },
+  "agricultural_summary": {
+    "total_plots": 1,
+    "total_farms": 1,
+    "total_irrigations": 1,
+    "total_farm_area": 0.07,
+    "crop_types": ["Sugarcane"],
+    "plantation_types": ["Adsali"],
+    "irrigation_types": ["Drip"]
+  },
+  "plots": [
+    {
+      "id": 46,
+      "fastapi_plot_id": "GAT22_22",
+      "gat_number": "GAT22",
+      "plot_number": "22",
+      "village": "Shirdi",
+      "taluka": "Sample Taluka",
+      "district": "Ahmedabad",
+      "state": "Maharashtra",
+      "country": "India",
+      "pin_code": "422605",
+      "location": {
+        "type": "Point",
+        "coordinates": [73.85553239999999, 18.5203924]
+      },
+      "boundary": {
+        "type": "Polygon",
+        "coordinates": [[[73.854, 18.519], [73.856, 18.519], [73.856, 18.520], [73.854, 18.520], [73.854, 18.519]]]
+      },
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z",
+      "created_by": {
+        "id": 2,
+        "username": "ram_officer",
+        "full_name": "Ram Thakur",
+        "phone_number": "9876543210"
+      },
+      "farms_count": 1,
+      "farms": [
+        {
+          "farm_uid": "2dbe327b-4c1a-4f2b-8c3d-123456789abc",
+          "address": "Farm Address, Village",
+          "area_size": "0.07",
+          "soil_type": "Loamy",
+          "crop_type": "Sugarcane",
+          "plantation_type": "Adsali",
+          "planting_method": "3 Bud Method",
+          "created_at": "2024-01-15T10:30:00Z",
+          "created_by": {
+            "id": 2,
+            "username": "ram_officer",
+            "full_name": "Ram Thakur"
+          },
+          "irrigations_count": 1,
+          "irrigations": [
+            {
+              "irrigation_type": "Drip",
+              "irrigation_source": "Well",
+              "installation_date": "2025-08-21",
+              "status": true,
+              "motor_horsepower": null,
+              "pipe_width_inches": null,
+              "flow_rate_lph": null,
+              "plants_per_acre": null,
+              "distance_motor_to_plot_m": null,
+              "emitters_count": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "fastapi_integration": {
+    "plot_ids_format": "GAT_NUMBER_PLOT_NUMBER",
+    "compatible_services": ["Admin.py", "ET.py", "field.py", "main.py", "events.py"],
+    "note": "Use fastapi_plot_id for calling FastAPI analysis services"
+  }
+}
+```
+
+**Complete Features**:
+- ✅ **Personal Profile**: Complete farmer personal information
+- ✅ **Agricultural Summary**: Statistics of all farming activities
+- ✅ **Plot Details**: All plots with FastAPI-compatible plot IDs
+- ✅ **Farm Information**: Crop type, plantation type, planting method, soil type
+- ✅ **Irrigation Systems**: Complete irrigation details and technical specifications
+- ✅ **GPS & Boundaries**: Exact coordinates and polygon boundaries
+- ✅ **Field Officer Info**: Details of who registered the farmer and farms
+- ✅ **FastAPI Integration**: Direct compatibility with all analysis services
+
+**Example Request**:
+```bash
+# Get farmer authentication token
+curl -X POST http://localhost:8000/api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{"username": "farmer_username", "password": "farmer_password"}'
+
+# Get complete farmer profile and agricultural data
+curl -X GET http://localhost:8000/api/farms/my-profile/ \
+  -H "Authorization: Bearer FARMER_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+**Farmer Login Use Cases**:
+- 🧑‍🌾 **Dashboard**: Complete agricultural overview for farmer's mobile/web app
+- 📱 **Mobile App**: All data needed for farmer's agricultural management app
+- 🗺️ **Plot Mapping**: GPS coordinates and boundaries for field visualization
+- 🌾 **Crop Management**: Plantation types, methods, and crop information
+- 💧 **Irrigation Control**: Irrigation system status and specifications
+- 🔗 **Analysis Services**: FastAPI plot IDs for accessing analytical services
+- 📊 **Performance Tracking**: Historical data and agricultural summaries
+- 📞 **Support Contact**: Field officer contact information for assistance
+
+### Get My Registered Farmers
+
+**Endpoint**: `GET /api/farms/my-farmers/`
+**Purpose**: Get all farmers registered by the currently logged-in field officer with their complete data
+**Access**: Field officers only
+
+**Response (Success)**:
+```json
+{
+  "success": true,
+  "field_officer": {
+    "id": 1,
+    "username": "ram_officer",
+    "full_name": "Ram Officer"
+  },
+  "summary": {
+    "total_farmers": 3,
+    "total_plots": 5,
+    "total_farms": 4,
+    "total_irrigations": 2
+  },
+  "farmers": [
+    {
+      "farmer": {
+        "id": 41,
+        "username": "rajesh_farmer_final",
+        "email": "rajesh_final@example.com",
+        "first_name": "Rajesh",
+        "last_name": "Patil",
+        "phone_number": "9876543210",
+        "address": "Maliwadi Village",
+        "village": "Rajapur",
+        "district": "Ahmednagar",
+        "state": "Maharashtra",
+        "role": {
+          "id": 3,
+          "name": "farmer"
+        }
+      },
+      "registration_summary": {
+        "plots_count": 1,
+        "farms_count": 1,
+        "irrigations_count": 1,
+        "registration_date": "2024-01-15 10:30:45"
+      },
+      "plots": [
+        {
+          "id": 27,
+          "gat_number": "GAT003_FINAL",
+          "plot_number": "PLOT003_FINAL",
+          "village": "Rajapur",
+          "district": "Ahmednagar",
+          "state": "Maharashtra",
+          "created_at": "2024-01-15 10:32:10",
+          "has_location": true,
+          "has_boundary": true
+        }
+      ],
+      "farms": [
+        {
+          "id": 20,
+          "farm_uid": "e81abe52-801f-474b-ae48-5590b1e90ff3",
+          "address": "Rajesh Farm, Rajapur Village, Karjat",
+          "area_size": "10.75",
+          "soil_type": "Loamy",
+          "crop_type": "Sugarcane",
+          "plantation_type": "adsali",
+          "planting_method": "3_bud",
+          "created_at": "2024-01-15 10:32:15",
+          "irrigations_count": 1
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Response (Error - Not Field Officer)**:
+```json
+{
+  "error": "Only field officers can access this endpoint"
+}
+```
+
+**Features**:
+- ✅ **Field Officer Specific** - Shows only farmers registered by the logged-in field officer
+- ✅ **Complete Data** - Includes farmer details, plots, farms, and irrigation counts
+- ✅ **Summary Statistics** - Total counts for quick overview
+- ✅ **Chronological Order** - Farmers ordered by registration date (newest first)
+- ✅ **Geometry Status** - Shows if plots have location/boundary data
+- ✅ **Detailed Metadata** - Creation timestamps and comprehensive farm details
+
+---
+
+   🔄 PLOT SYNCHRONIZATION APIs (NEW)
+
+These endpoints allow manual synchronization of plots to all FastAPI services when automatic sync fails.
+
+```bash
+POST /api/farms/sync-plots-to-apis/   # Manual plot sync to all FastAPI services
+```
+
+### Manual Plot Synchronization
+
+**Endpoint**: `POST /api/farms/sync-plots-to-apis/`
+**Purpose**: Manually sync plots to all FastAPI services (Admin.py, ET.py, field.py, main.py, events.py)
+**Access**: Field officers, admins, and managers only
+
+**Sync Specific Plots**:
+```json
+{
+  "plot_ids": [1, 2, 3]
+}
+```
+
+**Sync All Plots**:
+```json
+{
+  "sync_all": true
+}
+```
+
+**Response (Success)**:
+```json
+{
+  "success": true,
+  "message": "Sync completed for 3 plots",
+  "sync_summary": {
+    "total_plots": 3,
+    "successful_syncs": 15,
+    "failed_syncs": 0,
+    "plot_results": [
+      {
+        "plot_id": 1,
+        "gat_number": "GAT001",
+        "successful_services": ["events.py", "soil.py/main.py", "Admin.py", "ET.py", "field.py"],
+        "failed_services": [],
+        "success_count": 5,
+        "failure_count": 0
+      }
+    ]
+  }
+}
+```
+
+**Management Command (Alternative)**:
+```bash
+# Sync all plots
+python manage.py sync_all_plots_to_apis
+
+# Sync specific plot
+python manage.py sync_all_plots_to_apis --plot-id 1
+
+# Sync recent plots only
+python manage.py sync_all_plots_to_apis --recent 10
+
+# Dry run (show what would be synced)
+python manage.py sync_all_plots_to_apis --dry-run
+```
+
+---
+
+   🗑️ CASCADING DELETION SYSTEM (NEW)
+
+When a farmer is deleted, all their associated data is automatically deleted to maintain data integrity.
+
+### Deletion Hierarchy
+
+```
+👤 Farmer (User)
+├── 📍 Plots → Automatically deleted
+├── 🏠 Farms → Automatically deleted  
+└── 💧 Irrigations → Automatically deleted (via farm deletion)
+```
+
+### How It Works
+
+1. **Farmer Deletion Triggers**: When `User.delete()` is called on a farmer
+2. **Automatic Cascade**: Django signals detect the deletion and cascade to:
+   - All plots owned by the farmer (`Plot.farmer` relationship)
+   - All farms owned by the farmer (`Farm.farm_owner` relationship) 
+   - All irrigations tied to those farms (`FarmIrrigation.farm` relationship)
+3. **FastAPI Sync**: Plot deletions are automatically synced to all FastAPI services
+4. **Logging**: All deletions are logged for audit purposes
+
+### API Usage
+
+```bash
+# Delete farmer via API (if implemented)
+DELETE /api/users/{farmer_id}/
+
+# Or via Django admin/shell
+farmer = User.objects.get(id=farmer_id)
+farmer.delete()  # Cascades to all related objects
+```
+
+### What Gets Deleted
+
+- ✅ **Farmer record** (User with role='farmer')
+- ✅ **All plots** owned by the farmer
+- ✅ **All farms** owned by the farmer  
+- ✅ **All irrigation systems** in those farms
+- ✅ **FastAPI sync** - plots removed from all services
+
+### Safety Features
+
+- 🛡️ **Only affects farmers** - other user types (field officers, admins) are not affected
+- 🛡️ **Atomic operation** - either all objects are deleted or none
+- 🛡️ **Logging** - all deletions are logged with full details
+- 🛡️ **Error handling** - robust error handling for sync failures
+
+---
+
+   🚀 UNIFIED FARMER REGISTRATION APIs (NEW)
+
+These endpoints combine multiple registration steps into single API calls, making frontend development much easier.
+
+```bash
+POST /api/farms/register-farmer/          # Complete registration
+POST /api/farms/quick-farmer-registration/ # Farmer only
+```
+
+### Complete Farmer Registration
+
+**Endpoint**: `POST /api/farms/register-farmer/`
+**Purpose**: Register farmer + plot + farm + irrigation in one API call
+**Access**: Field officers only
+
+**Request Body**:
+```json
+{
+  "farmer": {
+    "username": "rajesh_farmer",
+    "email": "rajesh@example.com",
+    "password": "SecurePass@123",
+    "first_name": "Rajesh",
+    "last_name": "Patil",
+    "phone_number": "9876543210",
+    "address": "Maliwadi Village",
+    "village": "Rajapur",
+    "district": "Ahmednagar", 
+    "state": "Maharashtra",
+    "taluka": "Karjat"
+  },
+  "plot": {
+    "gat_number": "GAT001",
+    "plot_number": "PLOT001",
+    "village": "Rajapur",
+    "taluka": "Karjat",
+    "district": "Ahmednagar",
+    "state": "Maharashtra",
+    "country": "India",
+    "pin_code": "422605",
+    "location": {
+      "type": "Point",
+      "coordinates": [74.215, 19.567]
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [[[74.214, 19.566], [74.216, 19.566], [74.216, 19.568], [74.214, 19.568], [74.214, 19.566]]]
+    }
+  },
+  "farm": {
+    "address": "Rajesh Farm, Rajapur Village, Karjat",
+    "area_size": "10.75",
+    "plantation_date": "2024-01-15",
+    "spacing_a": "3.0",
+    "spacing_b": "1.5",
+    "soil_type_name": "Loamy",
+    "crop_type_name": "Sugarcane",
+    "plantation_type": "adsali",
+    "planting_method": "3_bud"
+  },
+  "irrigation": {
+    "irrigation_type_name": "drip",
+    "status": true,
+    "location": {
+      "type": "Point",
+      "coordinates": [74.215, 19.567]
+    },
+    "plants_per_acre": 2000,
+    "flow_rate_lph": 2.5,
+    "emitters_count": 150
+  }
+}
+```
+
+**Response (Success)**:
+```json
+{
+  "success": true,
+  "message": "Farmer registration completed successfully",
+  "registration_summary": {
+    "farmer": {
+      "id": 45,
+      "username": "rajesh_farmer",
+      "email": "rajesh@example.com",
+      "first_name": "Rajesh",
+      "last_name": "Patil",
+      "role": {"name": "farmer"},
+      "phone_number": "9876543210",
+      "village": "Rajapur",
+      "created_at": "2024-08-17T19:30:00Z"
+    },
+    "plot": {
+      "id": 12,
+      "gat_number": "GAT001",
+      "plot_number": "PLOT001",
+      "village": "Rajapur",
+      "farmer": {"id": 45, "username": "rajesh_farmer"},
+      "created_by": {"id": 2, "username": "fieldofficer1"}
+    },
+    "farm": {
+      "id": 8,
+      "farm_uid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "farm_owner": {"id": 45, "username": "rajesh_farmer"},
+      "plot": {"id": 12, "gat_number": "GAT001"},
+      "address": "Rajesh Farm, Rajapur Village, Karjat",
+      "area_size": "10.75",
+      "spacing_a": 3.0,
+      "spacing_b": 1.5,
+      "plants_in_field": 71667,
+      "soil_type": {"name": "Loamy"},
+      "crop_type": {"crop_type": "Sugarcane"}
+    },
+    "irrigation": {
+      "id": 3,
+      "irrigation_type": {"name": "drip"},
+      "status": true,
+      "plants_per_acre": 2000,
+      "flow_rate_lph": 2.5,
+      "emitters_count": 150
+    }
+  },
+  "ids": {
+    "farmer_id": 45,
+    "plot_id": 12,
+    "farm_id": 8,
+    "irrigation_id": 3
+  }
+}
+```
+
+**Field Descriptions**:
+
+#### Farm Section (Updated with Spacing Fields):
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `address` | string | ✅ | Farm address |
+| `area_size` | string | ✅ | Area in acres |
+| `spacing_a` | string | ❌ | **Spacing A in meters (between rows)** |
+| `spacing_b` | string | ❌ | **Spacing B in meters (between plants)** |
+| `soil_type_name` | string | ❌ | Soil type name |
+| `crop_type_name` | string | ❌ | Crop type name |
+| `plantation_type` | string | ❌ | Plantation type |
+| `planting_method` | string | ❌ | Planting method |
+
+#### Irrigation Section (Updated):
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `irrigation_type_name` | string | ✅ | "drip" or "flood" |
+| `status` | boolean | ❌ | Active status (default: true) |
+| `location` | object | ❌ | Point coordinates |
+
+**For Drip Irrigation:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `plants_per_acre` | integer | ❌ | Plants per acre |
+| `flow_rate_lph` | float | ❌ | Flow rate in LPH |
+| `emitters_count` | integer | ❌ | Number of emitters |
+
+**For Flood Irrigation:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `motor_horsepower` | float | ❌ | Motor horsepower |
+| `pipe_width_inches` | float | ❌ | Pipe width in inches |
+| `distance_motor_to_plot_m` | float | ❌ | Distance in meters |
+
+### Irrigation Examples
+
+#### Drip Irrigation Example:
+```json
+{
+  "farmer": {
+    "username": "drip_farmer",
+    "email": "drip@example.com",
+    "password": "password123",
+    "first_name": "Drip",
+    "last_name": "Farmer",
+    "phone_number": "+1234567890",
+    "address": "123 Drip Farm Road",
+    "village": "Drip Village",
+    "district": "Drip District",
+    "state": "Drip State"
+  },
+  "plot": {
+    "gat_number": "GAT002",
+    "village": "Drip Village",
+    "district": "Drip District",
+    "state": "Drip State",
+    "location": {"type": "Point", "coordinates": [77.209, 28.6139]}
+  },
+  "farm": {
+    "address": "123 Drip Farm Road, Drip Village",
+    "area_size": "2.5",
+    "spacing_a": "3.0",
+    "spacing_b": "1.5",
+    "soil_type_name": "Sandy Loam",
+    "crop_type_name": "Tomato"
+  },
+  "irrigation": {
+    "irrigation_type_name": "drip",
+    "status": true,
+    "location": {"type": "Point", "coordinates": [77.209, 28.6139]},
+    "plants_per_acre": 2000,
+    "flow_rate_lph": 2.5,
+    "emitters_count": 150
+  }
+}
+```
+
+#### Flood Irrigation Example:
+```json
+{
+  "farmer": {
+    "username": "flood_farmer",
+    "email": "flood@example.com",
+    "password": "password123",
+    "first_name": "Flood",
+    "last_name": "Farmer",
+    "phone_number": "+1987654321",
+    "address": "456 Flood Farm Road",
+    "village": "Flood Village",
+    "district": "Flood District",
+    "state": "Flood State"
+  },
+  "plot": {
+    "gat_number": "GAT003",
+    "village": "Flood Village",
+    "district": "Flood District",
+    "state": "Flood State",
+    "location": {"type": "Point", "coordinates": [77.210, 28.614]}
+  },
+  "farm": {
+    "address": "456 Flood Farm Road, Flood Village",
+    "area_size": "4.0",
+    "spacing_a": "2.0",
+    "spacing_b": "1.0",
+    "soil_type_name": "Clay Soil",
+    "crop_type_name": "Rice"
+  },
+  "irrigation": {
+    "irrigation_type_name": "flood",
+    "status": true,
+    "location": {"type": "Point", "coordinates": [77.210, 28.614]},
+    "motor_horsepower": 7.5,
+    "pipe_width_inches": 6.0,
+    "distance_motor_to_plot_m": 75.0
+  }
+}
+```
+
+**Key Features**:
+- ✅ **Spacing Fields**: `spacing_a` and `spacing_b` for plant calculation
+- ✅ **Automatic Plant Calculation**: Formula: `(area_size_acres * 43560) / (spacing_a * spacing_b)` where spacing values are used as-is without unit conversion
+- ✅ **Updated Irrigation**: Removed obsolete fields, added proper drip/flood fields
+- ✅ **Complete Registration**: Farmer + Plot + Farm + Irrigation in one API call
+- ✅ **Atomic Transaction**: All-or-nothing operation
+
+### Quick Farmer Registration
+
+**Endpoint**: `POST /api/farms/quick-farmer-registration/`
+**Purpose**: Register farmer only (for use with existing auto-assignment)
+**Access**: Field officers only
+
+**Request Body**:
+```json
+{
+  "username": "simple_farmer",
+  "email": "simple@example.com",
+  "password": "SecurePass@123",
+  "first_name": "Simple",
+  "last_name": "Farmer",
+  "phone_number": "9876543210",
+  "address": "Village Address",
+  "village": "Village Name",
+  "district": "District Name",
+  "state": "State Name",
+  "taluka": "Taluka Name"
+}
+```
+
+**Response (Success)**:
+```json
+{
+  "success": true,
+  "message": "Farmer registered successfully",
+  "farmer": {
+    "id": 46,
+    "username": "simple_farmer",
+    "email": "simple@example.com",
+    "first_name": "Simple",
+    "last_name": "Farmer",
+    "role": {"name": "farmer"},
+    "created_at": "2024-08-17T19:35:00Z"
+  },
+  "farmer_id": 46
+}
+```
+
+### Error Responses
+
+**Validation Error**:
+```json
+{
+  "success": false,
+  "error": "Username 'rajesh_farmer' already exists"
+}
+```
+
+**Permission Error**:
+```json
+{
+  "error": "Only field officers can register farmers"
+}
+```
+
+---
+
+   1. Soil Types 
+
+ # List / Create / Update / Delete
+
+```bash
+GET /soil-types/
+POST /soil-types/
+```
+
+ POST body (JSON): 
+
+```json
+{
+  "name": "Loamy",
+  "description": "Rich and fertile soil.",
+  "properties": "pH 6.5, well-drained"
+}
+```
+
+---
+
+   1. Crop Types 🌾
+
+```bash
+GET    /crop-types/          # 👁️ View/List all crop types
+POST   /crop-types/          # ➕ Add new crop type
+GET    /crop-types/{id}/     # 👁️ View specific crop type
+PUT    /crop-types/{id}/     # ✏️ Edit crop type
+PATCH  /crop-types/{id}/     # ✏️ Partial update crop type
+DELETE /crop-types/{id}/     # ❌ Delete crop type
+```
+
+**POST Body (Create Crop Type):**
+```json
+{
+  "crop_type": "Wheat",
+  "plantation_type": "Rabi",
+  "planting_method": "Broadcast"
+}
+```
+
+**Response (GET/POST):**
+```json
+{
+  "id": 1,
+  "crop_type": "Wheat",
+  "plantation_type": "Rabi",
+  "planting_method": "Broadcast"
+}
+```
+
+**Permissions:**
+* 👁️ View: Authenticated users
+* ➕ Create/✏️ Edit/❌ Delete: Admin users only
+
+---
+
+   2. Plantation Types 🌳
+
+```bash
+GET    /plantation-types/          # 👁️ View/List all plantation types
+POST   /plantation-types/          # ➕ Add new plantation type
+GET    /plantation-types/{id}/     # 👁️ View specific plantation type
+PUT    /plantation-types/{id}/     # ✏️ Edit plantation type
+PATCH  /plantation-types/{id}/     # ✏️ Partial update plantation type
+DELETE /plantation-types/{id}/     # ❌ Delete plantation type
+```
+
+**Query Parameters for GET:**
+* `plantation_type_id` - Filter by plantation type ID
+* `active_only=true` - Show only active plantation types
+* `crop_type_id` - Filter by crop type
+* `industry_id` - Filter by industry
+
+**POST Body (Create Plantation Type):**
+```json
+{
+  "crop_type_id": 1,
+  "name": "Adsali",
+  "code": "adsali",
+  "description": "Long-duration sugarcane plantation type",
+  "is_active": true
+}
+```
+
+**Response (GET/POST):**
+```json
+{
+  "id": 1,
+  "industry": 1,
+  "industry_name": "Sugarcane Industry",
+  "crop_type": {
+    "id": 1,
+    "crop_type": "Sugarcane"
+  },
+  "name": "Adsali",
+  "code": "adsali",
+  "description": "Long-duration sugarcane plantation type",
+  "is_active": true,
+  "created_at": "2024-01-15T10:30:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
+```
+
+**Plantation Type Features:**
+* 💧 Drip Plantation
+* 🌊 Flood Plantation
+* 💨 Sprinkler Plantation
+* 🏞️ Basin Plantation
+
+**Permissions:**
+* 👁️ View: Authenticated users
+* ➕ Create/✏️ Edit/❌ Delete: Admin users only
+
+---
+
+   3. Planting Methods 🌱
+
+```bash
+GET    /planting-methods/          # 👁️ View/List all planting methods
+POST   /planting-methods/          # ➕ Add new planting method
+GET    /planting-methods/{id}/     # 👁️ View specific planting method
+PUT    /planting-methods/{id}/     # ✏️ Edit planting method
+PATCH  /planting-methods/{id}/     # ✏️ Partial update planting method
+DELETE /planting-methods/{id}/     # ❌ Delete planting method
+```
+
+**Query Parameters for GET:**
+* `plantation_type_id` - Filter by plantation type (parent)
+* `active_only=true` - Show only active planting methods
+* `industry_id` - Filter by industry
+
+**POST Body (Create Planting Method):**
+```json
+{
+  "plantation_type_id": 1,
+  "name": "3 Bud Method",
+  "code": "3_bud",
+  "description": "Planting method using 3 buds per set",
+  "is_active": true
+}
+```
+
+**Response (GET/POST):**
+```json
+{
+  "id": 1,
+  "industry": 1,
+  "industry_name": "Sugarcane Industry",
+  "plantation_type": {
+    "id": 1,
+    "name": "Adsali",
+    "code": "adsali"
+  },
+  "name": "3 Bud Method",
+  "code": "3_bud",
+  "description": "Planting method using 3 buds per set",
+  "is_active": true,
+  "created_at": "2024-01-15T10:35:00Z",
+  "updated_at": "2024-01-15T10:35:00Z"
+}
+```
+
+**Planting Method Features:**
+* 🌱 Direct Seeding
+* 🌿 Transplanting
+* 🚜 Sowing by Machine
+* 👨‍🌾 Manual Sowing
+
+**Hierarchical Relationship:**
+```
+Crop Type
+  └── Plantation Type (Parent)
+      └── Planting Method (Child)
+```
+
+**Example: Get Planting Methods for a Specific Plantation Type:**
+```bash
+GET /planting-methods/?plantation_type_id=1
+```
+
+**Permissions:**
+* 👁️ View: Authenticated users
+* ➕ Create/✏️ Edit/❌ Delete: Admin users only
+
+---
+
+   4. Farms ✨ (AUTO-ASSIGNMENT ENABLED)
+
+```bash
+GET /farms/
+POST /farms/
+```
+
+ Query Params for GET: 
+
+* `my_farms=true`
+* `owner=USER_ID`
+* `lat=...&lng=...&radius=5` (geo-filter within 5 km)
+* `search=some text`
+
+ POST body (Field Officer - Auto-Assignment): 
+
+```json
+{
+    "address": "123 Farm Lane, Village XYZ",
+    "area_size": "10.50",
+    "soil_type_id": 1,
+    "crop_type_id": 1,
+    "plot_id": 1,
+    "farm_document": null
+}
+```
+
+**🎯 AUTO-ASSIGNMENT**: When created by field officers, the `farm_owner` field is automatically set to the most recently created farmer (within 30 minutes). No need to specify `farm_owner_id`!
+
+ POST Response (with Auto-Assignment): 
+
+```json
+{
+  "id": 8,
+  "farm_uid": "abc-123-def-456",
+  "farm_owner": {
+    "id": 45,
+    "username": "farmer123",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "farmer123@example.com"
+  },
+  "created_by": {
+    "id": 2,
+    "username": "fieldofficer1",
+    "first_name": "Officer",
+    "last_name": "One"
+  },
+  "plot": {
+    "id": 1,
+    "gat_number": "GAT001",
+    "plot_number": "PLOT001",
+    "village": "Nandgaon"
+  },
+  "address": "123 Farm Lane, Village XYZ",
+  "area_size": "10.50",
+  "soil_type": {
+    "id": 1,
+    "name": "Loamy"
+  },
+  "crop_type": {
+    "id": 1,
+    "crop_type": "Wheat"
+  },
+  "farm_document": null,
+  "created_at": "2024-08-17T19:30:00Z",
+  "updated_at": "2024-08-17T19:30:00Z"
+}
+```
+
+ Manual Assignment (Override): 
+
+```json
+{
+    "address": "123 Farm Lane, Village XYZ",
+    "area_size": "10.50",
+    "farm_owner_id": 45,  // Explicit farmer assignment
+    "soil_type_id": 1,
+    "crop_type_id": 1,
+    "plot_id": 1
+}
+```
+
+ Error Response (No Recent Farmer): 
+
+```json
+{
+  "farm_owner_id": [
+    "No recent farmer found. Please specify farm_owner_id or create a farmer first."
+  ]
+}
+```
+
+---
+
+   5. Farm GeoJSON 
+
+```bash
+GET /farms/geojson/
+```
+
+Supports same filters as `/farms/`.
+
+---
+
+   6. Plots ✨ (AUTO-ASSIGNMENT ENABLED)
+
+```bash
+GET /plots/
+POST /plots/
+```
+
+ Query Params: 
+
+* `my_farms=true`
+* `farm=FARM_ID`
+* `has_boundary=true`
+* `village=...&state=...` (filter fields)
+
+ POST body (Field Officer - Auto-Assignment): 
+
+```json
+{
+  "gat_number": "11",
+  "plot_number": "23",
+  "village": "Nandgaon",
+  "taluka": "Sangamner",
+  "district": "Ahmednagar",
+  "state": "Maharashtra",
+  "country": "India",
+  "pin_code": "422605",
+  "location": {
+    "type": "Point",
+    "coordinates": [74.215, 19.567]
+  },
+  "boundary": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [74.214, 19.566],
+        [74.216, 19.566],
+        [74.216, 19.568],
+        [74.214, 19.568],
+        [74.214, 19.566]
+      ]
+    ]
+  }
+}
+```
+
+**🎯 AUTO-ASSIGNMENT**: When created by field officers, the `farmer` field is automatically set to the most recently created farmer (within 30 minutes).
+
+ POST Response (with Auto-Assignment): 
+
+```json
+{
+  "id": 12,
+  "gat_number": "11",
+  "plot_number": "23", 
+  "village": "Nandgaon",
+  "taluka": "Sangamner",
+  "district": "Ahmednagar",
+  "state": "Maharashtra",
+  "country": "India",
+  "pin_code": "422605",
+  "location": {
+    "type": "Point",
+    "coordinates": [74.215, 19.567]
+  },
+  "boundary": {
+    "type": "Polygon",
+    "coordinates": [...]
+  },
+  "farmer": {
+    "id": 45,
+    "username": "farmer123",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "farmer123@example.com"
+  },
+  "created_by": {
+    "id": 2,
+    "username": "fieldofficer1",
+    "first_name": "Officer",
+    "last_name": "One"
+  },
+  "created_at": "2024-08-17T19:30:00Z",
+  "updated_at": "2024-08-17T19:30:00Z"
+}
+```
+
+ Manual Assignment (Override): 
+
+```json
+{
+  "gat_number": "11",
+  "plot_number": "23",
+  "farmer_id": 45,  // Explicit farmer assignment
+  "village": "Nandgaon",
+  // ... other fields
+}
+```
+
+---
+
+   7. Plot GeoJSON 
+
+```bash
+GET /plots/geojson/
+```
+
+Supports same filters as `/plots/`.
+
+---
+
+   8. Farm Images 
+
+```bash
+GET /farm-images/
+POST /farm-images/
+```
+
+ Query Params: 
+
+* `farm=FARM_ID`
+* `my_farms=true`
+* `start_date=2024-01-01`
+* `end_date=2024-12-31`
+
+ POST (multipart/form-data): 
+
+```bash
+curl -X POST http://localhost:8000/farm-images/ \
+  -H "Authorization: Token <TOKEN>" \
+  -F "farm=1" \
+  -F "title=Test Image" \
+  -F "image=@/path/to/image.jpg" \
+  -F "capture_date=2024-07-29" \
+  -F "notes=Initial survey"
+```
+
+---
+
+   9. Farm Sensors 
+
+```bash
+GET /farm-sensors/
+POST /farm-sensors/
+```
+
+ Query Params: 
+
+* `farm=FARM_ID`
+* `my_farms=true`
+* `type=Soil Moisture`
+* `status=true`
+
+ POST body: 
+
+```json
+{
+  "farm": 1,
+  "name": "Soil Sensor A",
+  "sensor_type": 1,
+  "location": "POINT(75.123 19.456)",
+  "installation_date": "2024-01-01",
+  "last_maintenance": "2024-06-01",
+  "status": true
+}
+```
+
+---
+
+   10. Farm Irrigation 
+
+```bash
+GET /farm-irrigations/
+POST /farm-irrigations/
+```
+
+ Query Params: 
+
+* `farm=FARM_ID`
+* `my_farms=true`
+* `type=Drip`
+* `status=false`
+
+ POST body: 
+
+```json
+{
+  "farm": 1,
+  "irrigation_type": 1,
+  "irrigation_source": "Well",
+  "location": "POINT(75.123 19.456)",
+  "installation_date": "2024-01-01",
+  "last_maintenance": "2024-06-01",
+  "status": true
+}
+```
+
+---
+
+  ✅ Bonus: Example `curl` GET Request with Filters
+
+```bash
+curl -X GET "http://localhost:8000/farms/?lat=19.456&lng=75.123&radius=5&my_farms=true" \
+     -H "Authorization: Token <your_token_here>"
+```
+
+
+
+ ---
+
+  🌾 Complete Auto-Assignment Workflow Example
+
+**FIELD OFFICER FARMER ENROLLMENT WORKFLOW**
+
+This example shows the complete process for a field officer to enroll a farmer and create associated plots and farms with automatic assignment.
+
+---
+
+ Step 1: Authenticate as Field Officer 
+
+```bash
+curl -X POST http://localhost:8000/api/token/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "fieldofficer1",
+    "password": "yourpassword"
+  }'
+```
+
+**Response**:
+```json
+{
+  "access": "eyJ0eXAiOiJKV1QiLCJhbGc...",
+  "refresh": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+}
+```
+
+---
+
+ Step 2: Create Farmer 
+
+```bash
+curl -X POST http://localhost:8000/api/users/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "farmer_rajesh",
+    "email": "rajesh@example.com",
+    "password": "SecurePass@123",
+    "first_name": "Rajesh",
+    "last_name": "Patil",
+    "role_id": 2,
+    "phone_number": "9876543210",
+    "address": "Maliwadi Village",
+    "village": "Rajapur",
+    "taluka": "Karjat",
+    "district": "Ahmednagar",
+    "state": "Maharashtra"
+  }'
+```
+
+**Response**:
+```json
+{
+  "id": 45,
+  "username": "farmer_rajesh",
+  "email": "rajesh@example.com",
+  "first_name": "Rajesh",
+  "last_name": "Patil",
+  "role": {"id": 2, "name": "farmer"},
+  "phone_number": "9876543210",
+  "village": "Rajapur",
+  "created_at": "2024-08-17T19:25:00Z"
+}
+```
+
+---
+
+ Step 3: Create Plot (Auto-assigns to Rajesh) 
+
+```bash
+curl -X POST http://localhost:8000/farms/plots/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gat_number": "GAT001",
+    "plot_number": "PLOT001",
+    "village": "Rajapur",
+    "taluka": "Karjat",
+    "district": "Ahmednagar",
+    "state": "Maharashtra",
+    "country": "India",
+    "pin_code": "422605",
+    "location": {
+      "type": "Point",
+      "coordinates": [74.215, 19.567]
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [74.214, 19.566],
+          [74.216, 19.566], 
+          [74.216, 19.568],
+          [74.214, 19.568],
+          [74.214, 19.566]
+        ]
+      ]
+    }
+  }'
+```
+
+**Response** (Note the auto-assigned farmer):
+```json
+{
+  "id": 12,
+  "gat_number": "GAT001", 
+  "plot_number": "PLOT001",
+  "village": "Rajapur",
+  "taluka": "Karjat",
+  "district": "Ahmednagar",
+  "state": "Maharashtra",
+  "farmer": {
+    "id": 45,
+    "username": "farmer_rajesh",
+    "first_name": "Rajesh",
+    "last_name": "Patil"
+  },
+  "created_by": {
+    "id": 2,
+    "username": "fieldofficer1"
+  },
+  "created_at": "2024-08-17T19:27:00Z"
+}
+```
+
+---
+
+ Step 4: Create Farm (Auto-assigns to Rajesh) 
+
+```bash
+curl -X POST http://localhost:8000/farms/farms/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "Rajesh Farm, Rajapur Village, Karjat",
+    "area_size": "10.75",
+    "plot_id": 12,
+    "soil_type_id": 1,
+    "crop_type_id": 1
+  }'
+```
+
+**Response** (Note the auto-assigned farm_owner):
+```json
+{
+  "id": 8,
+  "farm_uid": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "farm_owner": {
+    "id": 45,
+    "username": "farmer_rajesh", 
+    "first_name": "Rajesh",
+    "last_name": "Patil"
+  },
+  "created_by": {
+    "id": 2,
+    "username": "fieldofficer1"
+  },
+  "plot": {
+    "id": 12,
+    "gat_number": "GAT001",
+    "plot_number": "PLOT001",
+    "village": "Rajapur"
+  },
+  "address": "Rajesh Farm, Rajapur Village, Karjat",
+  "area_size": "10.75",
+  "created_at": "2024-08-17T19:28:00Z"
+}
+```
+
+---
+
+ Step 5: Verify Recent Farmers (Optional) 
+
+```bash
+curl -X GET http://localhost:8000/farms/farms/recent-farmers/ \
+  -H "Authorization: Bearer eyJ0eXAiOiJKV1QiLCJhbGc..."
+```
+
+**Response**:
+```json
+{
+  "most_recent_farmer": {
+    "id": 45,
+    "username": "farmer_rajesh",
+    "first_name": "Rajesh",
+    "last_name": "Patil"
+  },
+  "farmers_today": [
+    {
+      "id": 45,
+      "username": "farmer_rajesh",
+      "first_name": "Rajesh",
+      "last_name": "Patil"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+ 🎯 Key Benefits of Auto-Assignment 
+
+✅ **Zero Manual Lookup**: No need to remember or lookup farmer IDs  
+✅ **Error Prevention**: Eliminates wrong farmer assignments  
+✅ **Streamlined Workflow**: Faster farmer enrollment process  
+✅ **Automatic Relationships**: Perfect Farmer → Plot → Farm hierarchy  
+✅ **Time-Based Logic**: Intelligent 30-minute assignment window  
+✅ **Field Officer Isolation**: Each officer gets their own assignments  
+
+---
+
+ 🚨 Error Scenarios 
+
+**No Recent Farmer Found**:
+```json
+{
+  "farm_owner_id": [
+    "No recent farmer found. Please specify farm_owner_id or create a farmer first."
+  ]
+}
+```
+
+**Manual Override** (if auto-assignment fails):
+```bash
+# Specify explicit farmer_id
+curl -X POST http://localhost:8000/farms/farms/ \
+  -H "Authorization: Bearer ..." \
+  -d '{
+    "address": "Farm Address",
+    "area_size": "10.5", 
+    "farm_owner_id": 45,  // Explicit assignment
+    "plot_id": 12
+  }'
+```
+
+---
+
+ 🎯 NEW: Simplified Frontend Development 
+
+**Instead of multiple API calls**, you can now use:
+
+### Option 1: Complete Registration (Recommended)
+```bash
+# Single API call for everything
+POST /api/farms/register-farmer/
+```
+✅ **Creates**: Farmer + Plot + Farm + Irrigation  
+✅ **Returns**: All created objects with IDs  
+✅ **Atomic**: All-or-nothing transaction  
+
+### Option 2: Quick + Auto-Assignment
+```bash
+# Step 1: Quick farmer registration
+POST /api/farms/quick-farmer-registration/
+
+# Step 2: Create plot (auto-assigns to farmer)
+POST /api/farms/plots/
+
+# Step 3: Create farm (auto-assigns to farmer) 
+POST /api/farms/farms/
+```
+✅ **Simpler**: Fewer fields per request  
+✅ **Flexible**: Can add details later  
+✅ **Auto-linked**: Uses 30-minute auto-assignment  
+
+### Option 3: Manual (Old Way)
+```bash
+POST /api/users/         # Create farmer
+POST /api/farms/plots/   # Create plot
+POST /api/farms/farms/   # Create farm  
+# + manual farmer_id assignment
+```
+
+---
+
+Note:
+
+* Replace `YOUR_ACCESS_TOKEN` with a valid JWT or token.
+* Replace numeric IDs (`farm`, `soil_type_id`, `current_crop_id`, etc.) with actual IDs from your database.
+* Geo fields require `type` and `coordinates` in [GeoJSON format](https://geojson.org/).
+* **Auto-assignment works within 30 minutes** of farmer creation
+* **Field officers only**: Auto-assignment is restricted to users with `role='fieldofficer'`
+* **NEW**: Unified registration APIs make frontend development much easier!
+
+---
+
+## 🔄 FastAPI Plot Refresh System
+
+### Problem Solved
+When Django backend restarts, FastAPI services lose their in-memory plot data and show empty plots (0 plots) even though Django database contains the plots.
+
+### Solution: Refresh Endpoints
+All FastAPI services now have refresh endpoints to reload plots from Django:
+
+#### **POST /refresh-from-django**
+Available on all FastAPI services:
+- **main.py** (port 8003): `http://localhost:8003/refresh-from-django`
+- **ET.py** (port 8009): `http://localhost:8009/refresh-from-django`
+- **field.py** (port 7002): `http://localhost:7002/refresh-from-django`
+- **Admin.py** (port 7030): `http://localhost:7030/refresh-from-django`
+- **events.py** (port 9000): `http://localhost:9000/refresh-from-django`
+
+**Response:**
+```json
+{
+  "status": "success",
+  "message": "Successfully refreshed 6 plots from Django",
+  "plot_count": 6,
+  "plots_with_django_ids": 6
+}
+```
+
+### Easy Refresh Methods
+
+#### **Method 1: Automated Script (Recommended)**
+```bash
+# Run this after Django restarts
+source envm/bin/activate
+python refresh_all_apis.py
+```
+
+#### **Method 2: Django Management Command**
+```bash
+# Alternative method
+source envm/bin/activate
+python manage.py refresh_fastapi_services
+python manage.py sync_all_plots_to_apis
+```
+
+#### **Method 3: Manual Service Refresh**
+```bash
+# Refresh individual services
+curl -X POST http://localhost:8003/refresh-from-django
+curl -X POST http://localhost:8009/refresh-from-django
+curl -X POST http://localhost:7002/refresh-from-django
+curl -X POST http://localhost:7030/refresh-from-django
+curl -X POST http://localhost:9000/refresh-from-django
+```
+
+### Verification
+Check that all services have plots:
+```bash
+curl http://localhost:8003/plots/ | jq length  # Should return plot count
+curl http://localhost:8009/plots/ | jq length  # Should return plot count
+curl http://localhost:7002/plots/ | jq length  # Should return plot count
+curl http://localhost:7030/plots/ | jq length  # Should return plot count
+curl http://localhost:9000/plots/ | jq length  # Should return plot count
+```
+
+### When to Use
+- ✅ After Django backend restarts
+- ✅ When FastAPI services show 0 plots but Django has plots in database
+- ✅ When plot data gets out of sync between Django and FastAPI services
+- ✅ For routine maintenance and sync verification
+
+**Result**: All FastAPI services will have the same plot data as Django database, ensuring perfect synchronization! 🎉
+
+# COMPREHENSIVE API DOCUMENTATION
+# Updated: 2025-01-19
+# Enhanced with Complete Data Fields for Farmer Profile API
+
+## 🌾 FARMER PROFILE API - COMPLETE DATA
+
+### GET /api/farms/my-profile/
+**Purpose**: Get complete farmer profile with ALL agricultural data and details
+
+**Authentication**: Bearer Token (Farmer only)
+**Access**: Only users with role='farmer'
+
+**Response**: Complete farmer profile including:
+- ✅ **Personal Profile**: All farmer details, contact info, address
+- ✅ **Plot Details**: Complete plot information with GPS coordinates and boundaries
+- ✅ **Farm Details**: All farm data including crop types, soil types, documents
+- ✅ **Irrigation Details**: Complete irrigation system information with GPS locations
+- ✅ **FastAPI Integration**: Plot IDs compatible with all analysis services
+- ✅ **Ownership Details**: Who created what and when
+- ✅ **Agricultural Summary**: Statistics and overview
+
+---
+
+## 📊 COMPLETE DATA STRUCTURE
+
+### 1. FARMER PROFILE SECTION
+```json
+{
+  "farmer_profile": {
+    "id": 58,
+    "username": "faxokew458",
+    "email": "demo222@gmail.com",
+    "personal_info": {
+      "first_name": "OMRAM",
+      "last_name": "Thakur",
+      "full_name": "OMRAM Thakur",
+      "phone_number": "9123456874",
+      "profile_picture": {
+        "url": "/media/profile_pics/photo.jpg",
+        "name": "photo.jpg"
+      }
+    },
+    "address_info": {
+      "address": "Shraddha Park Housing Society",
+      "village": "Shirdi",
+      "district": "Ahmedabad",
+      "state": "Maharashtra",
+      "taluka": "Niphad",
+      "full_address": "Shraddha Park Housing Society, Shirdi, Niphad, Ahmedabad, Maharashtra"
+    },
+    "account_info": {
+      "date_joined": "2025-01-15T10:30:00Z",
+      "last_login": "2025-01-19T08:45:00Z",
+      "is_active": true,
+      "created_at": "2025-01-15T10:30:00Z",
+      "updated_at": "2025-01-19T08:45:00Z"
+    },
+    "role": {
+      "id": 3,
+      "name": "farmer",
+      "display_name": "Farmer"
+    }
+  }
+}
+```
+
+### 2. PLOT DETAILS SECTION (Complete)
+```json
+{
+  "plots": [
+    {
+      "id": 46,
+      "fastapi_plot_id": "GAT22_22",
+      "gat_number": "GAT22",
+      "plot_number": "22",
+      "address": {
+        "village": "Shirdi",
+        "taluka": "Niphad",
+        "district": "Ahmedabad",
+        "state": "Maharashtra",
+        "country": "India",
+        "pin_code": "423109",
+        "full_address": "Shirdi, Niphad, Ahmedabad, Maharashtra, India - 423109"
+      },
+      "coordinates": {
+        "location": {
+          "type": "Point",
+          "coordinates": [73.85553239999999, 18.5203924],
+          "latitude": 18.5203924,
+          "longitude": 73.85553239999999
+        },
+        "boundary": {
+          "type": "Polygon",
+          "coordinates": [[[73.855, 18.520], [73.856, 18.520], [73.856, 18.521], [73.855, 18.521], [73.855, 18.520]]],
+          "has_boundary": true
+        }
+      },
+      "timestamps": {
+        "created_at": "2025-08-19T07:23:15.929838Z",
+        "updated_at": "2025-08-19T07:23:15.929851Z"
+      },
+      "ownership": {
+        "farmer": {
+          "id": 58,
+          "username": "faxokew458",
+          "full_name": "OMRAM Thakur",
+          "email": "demo222@gmail.com",
+          "phone_number": "9123456874"
+        },
+        "created_by": {
+          "id": 45,
+          "username": "ram_officer",
+          "full_name": "Ram Officer",
+          "email": "ram@example.com",
+          "phone_number": "9876543210",
+          "role": "Field Officer"
+        }
+      },
+      "farms": [...],
+      "farms_count": 1
+    }
+  ]
+}
+```
+
+### 3. FARM DETAILS SECTION (Complete)
+```json
+{
+  "farms": [
+    {
+      "id": 34,
+      "farm_uid": "2dbe327b-d443-46d3-bb2c-1bf9fc9947b9",
+      "farm_owner": {
+        "id": 58,
+        "username": "faxokew458",
+        "full_name": "OMRAM Thakur",
+        "email": "demo222@gmail.com",
+        "phone_number": "9123456874"
+      },
+      "address": "Shirdi, Niphad, Ahmedabad",
+      "area_size": "0.07",
+      "area_size_numeric": 0.07,
+      "soil_type": {
+        "id": 3,
+        "name": "Loamy"
+      },
+      "crop_type": {
+        "id": 5,
+        "crop_type": "Sugarcane",
+        "plantation_type": "adsali",
+        "plantation_type_display": "Adsali",
+        "planting_method": "3_bud",
+        "planting_method_display": "3 Bud Method"
+      },
+      "farm_document": {
+        "name": "farm_doc.pdf",
+        "url": "/media/farm_docs/farm_doc.pdf",
+        "size": 1024000
+      },
+      "created_at": "2025-08-19T07:23:15.934661Z",
+      "updated_at": "2025-08-19T07:23:15.934672Z",
+      "created_by": {
+        "id": 45,
+        "username": "ram_officer",
+        "full_name": "Ram Officer",
+        "email": "ram@example.com",
+        "phone_number": "9876543210"
+      },
+      "irrigations": [...],
+      "irrigations_count": 1
+    }
+  ]
+}
+```
+
+### 4. IRRIGATION DETAILS SECTION (Complete)
+```json
+{
+  "irrigations": [
+    {
+      "id": 15,
+      "irrigation_type": "Drip",
+      "irrigation_type_code": "Drip",
+      "irrigation_source": "Well",
+      "location": {
+        "type": "Point",
+        "coordinates": [73.85553239999999, 18.5203924]
+      },
+      "installation_date": "2025-08-21",
+      "last_maintenance": null,
+      "status": true,
+      "status_display": "Active",
+      "motor_horsepower": null,
+      "pipe_width_inches": null,
+      "distance_motor_to_plot_m": null,
+      "plants_per_acre": null,
+      "flow_rate_lph": null,
+      "emitters_count": null
+    }
+  ]
+}
+```
+
+### 5. AGRICULTURAL SUMMARY SECTION
+```json
+{
+  "agricultural_summary": {
+    "total_plots": 1,
+    "total_farms": 1,
+    "total_irrigations": 1,
+    "crop_types": ["Sugarcane"],
+    "plantation_types": ["Adsali"],
+    "irrigation_types": ["Drip"],
+    "total_farm_area": 0.07
+  }
+}
+```
+
+### 6. FASTAPI INTEGRATION SECTION
+```json
+{
+  "fastapi_integration": {
+    "plot_ids_format": "GAT_NUMBER_PLOT_NUMBER",
+    "compatible_services": ["Admin.py", "ET.py", "field.py", "main.py", "events.py", "soil.py"],
+    "note": "Use fastapi_plot_id for calling FastAPI analysis services"
+  }
+}
+```
+
+---
+
+## 🔧 COMPLETE FEATURES INCLUDED
+
+### ✅ **FARMER PROFILE DATA**
+- Complete personal information (name, email, phone)
+- Profile picture details (if available)
+- Structured address information
+- Account status and timestamps
+- Role and permissions
+
+### ✅ **PLOT DETAILS (Complete)**
+- Django database ID and FastAPI plot ID
+- GAT number and plot number
+- **GPS Coordinates**: Latitude, longitude, full coordinate arrays
+- **Boundary Polygons**: Complete polygon coordinates for mapping
+- Full address breakdown (village, taluka, district, state, country, PIN)
+- Ownership details (farmer + who created it)
+- Timestamps (created, updated)
+
+### ✅ **FARM DETAILS (Complete)**
+- Farm ID and unique farm UID
+- Farm owner complete information
+- **Area**: Both string and numeric values
+- **Soil Type**: ID and name
+- **Crop Information**: Complete crop details with display names
+- **Farm Documents**: File details if available
+- Creation and update timestamps
+- Who created the farm
+
+### ✅ **IRRIGATION DETAILS (Complete)**
+- Irrigation system ID
+- **Type**: Both display name and code
+- **Source**: Water source information
+- **GPS Location**: Irrigation system coordinates
+- **Installation Date**: When system was installed
+- **Last Maintenance**: Maintenance history
+- **Status**: Active/inactive with display text
+- **Technical Specs**: Motor HP, pipe width, flow rates
+- **Distance**: Distance from motor to plot
+- **Planting Details**: Plants per acre, emitters count
+
+### ✅ **COORDINATE SYSTEMS**
+- **Plot Location**: Point coordinates (lat/long)
+- **Plot Boundaries**: Polygon coordinates for mapping
+- **Irrigation Location**: GPS coordinates for irrigation systems
+- **Coordinate Format**: Both GeoJSON and separate lat/long values
+
+### ✅ **OWNERSHIP & AUDIT TRAIL**
+- Who owns each plot/farm
+- Who created each record
+- Complete timestamps for all operations
+- Role information for field officers
+
+---
+
+## 📱 MOBILE APP & FRONTEND READY
+
+### **Data Structure Benefits:**
+- **Hierarchical Organization**: Easy to navigate and display
+- **Complete Information**: No need for additional API calls
+- **GPS Ready**: All coordinates in standard formats
+- **Mapping Compatible**: Polygon boundaries for GIS applications
+- **FastAPI Integration**: Direct compatibility with analysis services
+
+### **Use Cases:**
+- **Farmer Dashboard**: Complete profile overview
+- **Mobile Apps**: All data in single API call
+- **Mapping Applications**: GPS coordinates and boundaries
+- **Agricultural Analysis**: Integration with FastAPI services
+- **Document Management**: Farm documents and records
+
+---
+
+## 🚀 EXAMPLE CURL REQUEST
+
+```bash
+# Get complete farmer profile with all data
+curl -X GET "http://localhost:8000/api/farms/my-profile/" \
+  -H "Authorization: Bearer YOUR_FARMER_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+## 🔐 SECURITY & ACCESS CONTROL
+
+- **Role-Based Access**: Only farmers can access their own profile
+- **Data Isolation**: Farmers only see their own data
+- **Authentication Required**: Bearer token authentication
+- **No Cross-User Access**: Complete data privacy
+
+---
+
+## 📊 COMPARISON WITH OTHER APIs
+
+| API Endpoint | Purpose | Data Richness | User Type |
+|--------------|---------|---------------|-----------|
+| `/farms/my-profile/` | **Complete farmer profile** | **⭐⭐⭐⭐⭐ ALL DATA** | **Farmer only** |
+| `/farms/recent-farmers/` | Field officer view | ⭐⭐⭐⭐ High | Field officer |
+| `/farms/my-farmers/` | Field officer farmers list | ⭐⭐⭐ Medium | Field officer |
+| `/users/me/` | Basic user profile | ⭐⭐ Low | All users |
+
+---
+
+## 🎯 SUMMARY
+
+The enhanced `/farms/my-profile/` API now provides:
+
+✅ **COMPLETE DATA**: Every field stored in the database  
+✅ **GPS COORDINATES**: Latitude, longitude, and polygon boundaries  
+✅ **IRRIGATION DETAILS**: Complete system information with locations  
+✅ **FARM DOCUMENTS**: File details and metadata  
+✅ **OWNERSHIP TRAIL**: Complete audit trail of who created what  
+✅ **FASTAPI INTEGRATION**: Plot IDs for analysis services  
+✅ **MOBILE READY**: Structured data perfect for mobile apps  
+✅ **MAPPING COMPATIBLE**: All coordinates in standard formats  
+
+This API now serves as the **single source of truth** for farmers to access all their agricultural data, making it perfect for mobile applications, dashboards, and integration with other services.
+
+# 🌾 **FARM MANAGEMENT SYSTEM - HIERARCHICAL STRUCTURE DIAGRAM**
+
+## 🏗️ **USER ROLES & PERMISSIONS HIERARCHY**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SUPER ADMIN (Django Superuser)                    │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Full system access                               │ │
+│                    │ • Can manage all users, roles, and data            │ │
+│                    │ • Override all permissions                         │ │
+│                    │ • Access to Django admin interface                 │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              ADMIN ROLE                                     │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Manage all users (except super admin)            │ │
+│                    │ • Full CRUD on farms, plots, equipment            │ │
+│                    │ • Access to all system data                        │ │
+│                    │ • Can create/assign managers                       │ │
+│                    │ • Override all permissions                         │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             MANAGER ROLE                                    │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Create and manage field officers                 │ │
+│                    │ • View field officer performance and statistics    │ │
+│                    │ • Manage equipment and inventory                    │ │
+│                    │ • Oversee farm operations                          │ │
+│                    │ • Access to farm analytics and reports             │ │
+│                    │ • Monitor field officer productivity               │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (creates & manages)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          FIELD OFFICER ROLE                                │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Create and manage farmers                        │ │
+│                    │ • Register plots and farms                         │ │
+│                    │ • Auto-assign farmers to plots/farms               │ │
+│                    │ • Access to assigned farmers' data                 │ │
+│                    │ • Manage farm equipment and irrigation             │ │
+│                    │ • Upload farm documents and images                 │ │
+│                    │ • Sync data with FastAPI analysis services         │ │
+│                    │ • Created by: Manager                              │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (creates & manages)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                             FARMER ROLE                                    │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • View own farms and plots                         │ │
+│                    │ • Access farm analytics and reports                │ │
+│                    │ • View irrigation and equipment status             │ │
+│                    │ • Receive task assignments                         │ │
+│                    │ • Limited to own data only                         │ │
+│                    │ • Created by: Field Officer                        │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+## 🌾 **FARM MANAGEMENT ENTITY HIERARCHY**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              MANAGER                                       │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Creates field officers                           │ │
+│                    │ • Monitors field officer performance               │ │
+│                    │ • Oversees farm operations                         │ │
+│                    │ • Manages equipment and inventory                  │ │
+│                    │ • Views analytics and reports                      │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (creates & manages)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              FIELD OFFICER                                 │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Creates farmers                                   │ │
+│                    │ • Registers plots                                  │ │
+│                    │ • Establishes farms                                │ │
+│                    │ • Manages equipment                                │ │
+│                    │ • Sets up irrigation                               │ │
+│                    │ • Created by: Manager                              │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (creates)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              FARMER (User)                                 │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Personal Information                             │ │
+│                    │   - Name, email, phone, address                    │ │
+│                    │   - Village, taluka, district, state               │ │
+│                    │   - Profile picture                                │ │
+│                    │ • Role: 'farmer'                                   │ │
+│                    │ • Created by: Field Officer                        │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (owns)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                PLOT                                       │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Land Identification                              │ │
+│                    │   - GAT Number (Government Land Number)            │ │
+│                    │   - Plot Number                                    │ │
+│                    │   - Village, Taluka, District, State               │ │
+│                    │   - PIN Code, Country                              │ │
+│                    │ • Geographic Data                                  │ │
+│                    │   - GPS Coordinates (Point)                        │ │
+│                    │   - Boundary Polygon                               │ │
+│                    │ • Ownership                                        │ │
+│                    │   - Farmer (auto-assigned)                         │ │
+│                    │   - Created by (Field Officer)                     │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (contains)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                                FARM                                       │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Farm Details                                     │ │
+│                    │   - Unique Farm UID                                │ │
+│                    │   - Address                                        │ │
+│                    │   - Area Size (acres)                              │ │
+│                    │ • Agricultural Data                                │ │
+│                    │   - Soil Type (Loamy, Clay, Sandy, etc.)           │ │
+│                    │   - Crop Type (Sugarcane, Rice, Wheat, etc.)       │ │
+│                    │   - Plantation Type (Adsali, Suru, Ratoon)         │ │
+│                    │   - Planting Method (3 Bud, 2 Bud, 1 Bud)         │ │
+│                    │ • Ownership                                        │ │
+│                    │   - Farm Owner (Farmer)                            │ │
+│                    │   - Created by (Field Officer)                     │ │
+│                    │   - Linked Plot                                    │ │
+│                    │ • Documents                                        │ │
+│                    │   - Farm Documents                                 │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼ (has)
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            FARM COMPONENTS                                 │
+│                    ┌─────────────────────────────────────────────────────┐ │
+│                    │ • Farm Images                                      │ │
+│                    │   - Field photos                                   │ │
+│                    │   - Crop status images                             │ │
+│                    │   - Document scans                                 │ │
+│                    │ • Farm Sensors                                     │ │
+│                    │   - Soil moisture sensors                          │ │
+│                    │   - Weather stations                               │ │
+│                    │   - Crop health monitors                           │ │
+│                    │ • Farm Irrigation                                  │ │
+│                    │   - Irrigation type (Drip, Sprinkler, Flood)       │ │
+│                    │   - Water source (Well, Canal, River, Borewell)    │ │
+│                    │   - Technical specs (HP, pipe width, flow rate)    │ │
+│                    │   - Installation and maintenance dates             │ │
+│                    └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+## 🔄 **AUTO-ASSIGNMENT WORKFLOW**
+
+```
+Field Officer Workflow:
+1. Create Farmer → POST /users/users/
+2. Create Plot → POST /farms/plots/ (auto-assigns to recent farmer)
+3. Create Farm → POST /farms/farms/ (auto-assigns to recent farmer + links plot)
+
+Auto-Assignment Logic:
+• Time Window: 30 minutes (configurable)
+• Fallback: Farmers created today
+• Safety: Only assign users with role='farmer'
+• Validation: Field officer must have role='fieldofficer'
+```
+
+## 📊 **DATA RELATIONSHIPS**
+
+```
+User (Farmer)
+├── plots (Plot) - One-to-Many
+│   ├── farms (Farm) - One-to-Many
+│   │   ├── farm_images (FarmImage) - One-to-Many
+│   │   ├── farm_sensors (FarmSensor) - One-to-Many
+│   │   └── farm_irrigations (FarmIrrigation) - One-to-Many
+│   └── boundary (GIS Polygon)
+└── farms (Farm) - One-to-Many
+
+Field Officer
+├── created_farmers (User) - One-to-Many
+├── created_plots (Plot) - One-to-Many
+└── created_farms (Farm) - One-to-Many
+
+Plot
+├── farmer (User) - Many-to-One
+├── farms (Farm) - One-to-Many
+└── created_by (User) - Many-to-One
+
+Farm
+├── farm_owner (User) - Many-to-One
+├── plot (Plot) - Many-to-One
+├── soil_type (SoilType) - Many-to-One
+├── crop_type (CropType) - Many-to-One
+└── created_by (User) - Many-to-One
+```
+
+## 🎯 **PERMISSION MATRIX**
+
+| Action | Super Admin | Admin | Manager | Field Officer | Farmer |
+|--------|-------------|-------|---------|---------------|---------|
+| **User Management** | ✅ All | ✅ All (except super) | ✅ Limited | ❌ None | ❌ None |
+| **Create Farmers** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Create Plots** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Create Farms** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **View All Data** | ✅ | ✅ | ✅ | ✅ Own farmers | ❌ Own only |
+| **Edit All Data** | ✅ | ✅ | ✅ | ✅ Own farmers | ❌ Own only |
+| **Delete Data** | ✅ | ✅ | ✅ | ✅ Own farmers | ❌ None |
+| **Equipment Mgmt** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Inventory Mgmt** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **Task Assignment** | ✅ | ✅ | ✅ | ✅ | ❌ View own |
+
+## 🌐 **FASTAPI INTEGRATION**
+
+```
+Django Backend (Port 8000)
+├── Admin.py (Port 7030) - SAR Index Mapping
+├── ET.py (Port 8009) - Evapotranspiration
+├── events.py (Port 9000) - Agriculture Analysis
+├── field.py (Port 7002) - Vegetation Health
+├── main.py (Port 8003) - Enhanced Soil Analysis
+└── soil.py (Port 8001) - Basic Soil Analysis
+
+Sync Mechanism:
+• Bidirectional data synchronization
+• Real-time plot updates
+• Automatic service notification
+• Data consistency across all services
+```
+
+## 📋 **KEY FEATURES BY ROLE**
+
+### **Field Officer Capabilities:**
+- ✅ Create and manage farmers
+- ✅ Register land plots with GPS coordinates
+- ✅ Establish farms with agricultural data
+- ✅ Set up irrigation systems
+- ✅ Manage farm equipment
+- ✅ Upload farm documentation
+- ✅ Auto-assignment system for efficiency
+- ✅ Access to FastAPI analysis services
+
+### **Farmer Capabilities:**
+- ✅ View own farm data and analytics
+- ✅ Access crop health reports
+- ✅ Monitor irrigation status
+- ✅ View equipment status
+- ✅ Receive task assignments
+- ✅ Access soil analysis results
+
+### **Manager Capabilities:**
+- ✅ Oversee field officer operations
+- ✅ View farm analytics and reports
+- ✅ Manage equipment and inventory
+- ✅ Monitor system performance
+- ✅ Access to all farm data
+
+### **Admin Capabilities:**
+- ✅ Full system management
+- ✅ User role assignment
+- ✅ System configuration
+- ✅ Data backup and maintenance
+- ✅ Override all permissions
+
+---
+
+# 🚀 **PROJECT STATUS: ALL SERVICES RUNNING SUCCESSFULLY**
+
+## ✅ **RUNNING SERVICES STATUS**
+
+### **🌐 Django Backend (Main Application)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 8000
+- **URL**: http://localhost:8000/
+- **Admin**: http://localhost:8000/admin/
+- **API**: http://localhost:8000/api/
+- **Database**: PostgreSQL (neoce) - ✅ **CONNECTED**
+- **Migrations**: ✅ **ALL APPLIED**
+- **Features**: 
+  - User Management with Role-Based Access Control
+  - Farm Management with GIS capabilities
+  - Auto-assignment system for field officers
+  - Complete CRUD operations for all entities
+
+### **🔬 FastAPI Analysis Services (All Running)**
+
+#### **1. SAR Index Mapping API (Admin.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 7030
+- **URL**: http://localhost:7030/
+- **Purpose**: Sentinel-1 SAR analysis, vegetation indices
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE** - Loaded 11 plots
+
+#### **2. Evapotranspiration API (ET.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 8009
+- **URL**: http://localhost:8009/
+- **Purpose**: ET computation using Sentinel-2 data
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE**
+
+#### **3. Agriculture Analysis API (events.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 9000
+- **URL**: http://localhost:9000/
+- **Purpose**: Comprehensive analysis (Brix, Recovery, Sugar Yield)
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE** - 11 plots loaded
+- **Features**: 
+  - Brix, Recovery, and Sugar Yield analysis
+  - Vegetation indices (NDVI, NDRE, MSAVI, NDMI, NDWI)
+  - Biomass estimation using Sentinel-1 RVI
+  - Stress detection and irrigation planning
+  - Harvest analysis and growth stage tracking
+
+#### **4. Vegetation Health API (field.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 7002
+- **URL**: http://localhost:7002/
+- **Purpose**: Sentinel-1 SAR vegetation health analysis
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE**
+
+#### **5. Enhanced Soil Analysis API (main.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 8003
+- **URL**: http://localhost:8003/
+- **Purpose**: NPK + SAR-based Fe analysis
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE** - 11 plots loaded
+- **Features**:
+  - Soil parameter analysis
+  - NPK analysis
+  - Fe Index analysis using Sentinel-1 SAR
+
+#### **6. Basic Soil Analysis API (soil.py)**
+- **Status**: ✅ **RUNNING**
+- **Port**: 8001
+- **URL**: http://localhost:8001/
+- **Purpose**: Basic soil parameter analysis
+- **Data Source**: Django /plots/ API
+- **Response**: ✅ **ACTIVE** - Swagger UI available at /docs
+
+### **🗄️ Database & Infrastructure**
+- **PostgreSQL**: ✅ **RUNNING** (neoce database)
+- **PostGIS**: ✅ **ENABLED** (GIS extensions)
+- **Virtual Environment**: ✅ **ACTIVATED** (envm)
+- **Dependencies**: ✅ **ALL INSTALLED**
+
+## 🌟 **SYSTEM FEATURES STATUS**
+
+### **✅ Core Features Working**
+- **User Authentication & Authorization**: ✅ Role-based access control
+- **Farm Management**: ✅ Complete CRUD operations
+- **Plot Management**: ✅ GIS integration with boundaries
+- **Auto-Assignment**: ✅ Field officer workflow automation
+- **Data Synchronization**: ✅ Bidirectional Django ↔ FastAPI sync
+- **GIS Capabilities**: ✅ PostGIS, Leaflet integration
+- **File Management**: ✅ Document and image uploads
+- **Equipment & Inventory**: ✅ Complete management system
+- **Task Management**: ✅ Assignment and tracking
+- **Vendor Management**: ✅ Purchase orders and communications
+
+### **✅ Advanced Analytics**
+- **Satellite Data Analysis**: ✅ Sentinel-1 & Sentinel-2 integration
+- **Vegetation Indices**: ✅ NDVI, NDRE, MSAVI, NDMI, NDWI
+- **Soil Analysis**: ✅ NPK, Fe Index, SAR-based analysis
+- **Crop Health Monitoring**: ✅ Stress detection, irrigation planning
+- **Harvest Planning**: ✅ Growth stage tracking, optimal timing
+- **Biomass Estimation**: ✅ RVI-based analysis
+
+## 🎯 **ACCESS POINTS**
+
+### **🌐 Web Interfaces**
+- **Main Application**: http://localhost:8000/
+- **Django Admin**: http://localhost:8000/admin/
+- **API Documentation**: http://localhost:8000/api/
+- **Swagger UI**: Available on all FastAPI services
+
+### **🔌 API Endpoints**
+- **Django REST API**: http://localhost:8000/api/
+- **SAR Analysis**: http://localhost:7030/
+- **ET Analysis**: http://localhost:8009/
+- **Agriculture Analysis**: http://localhost:9000/
+- **Vegetation Health**: http://localhost:7002/
+- **Soil Analysis**: http://localhost:8003/
+- **Basic Soil**: http://localhost:8001/
+
+### **📱 Mobile/Client Access**
+- **CORS Enabled**: ✅ All origins allowed
+- **JWT Authentication**: ✅ Token-based security
+- **GeoJSON Support**: ✅ GIS data export
+- **File Uploads**: ✅ Document and image support
+
+## 🚀 **NEXT STEPS**
+
+### **For Field Officers:**
+1. **Access**: http://localhost:8000/admin/ (create superuser first)
+2. **Create Roles**: Set up admin, manager, field officer roles
+3. **Register Farmers**: Use the user management system
+4. **Create Plots**: Use farm management with GIS boundaries
+5. **Establish Farms**: Link plots to farmers automatically
+
+### **For Developers:**
+1. **API Testing**: Use Postman collection provided
+2. **Frontend Integration**: Connect to Django REST API
+3. **GIS Integration**: Use GeoJSON endpoints for mapping
+
+### **For System Administrators:**
+1. **Monitor Services**: All 7 services running successfully
+2. **Database Health**: PostgreSQL with PostGIS active
+3. **Performance**: Monitor resource usage across services
+4. **Backup**: Regular database and file backups
+
+## 🎉 **PROJECT SUCCESSFULLY DEPLOYED!**
+
+**All services are running and ready for production use. The farm management system is fully operational with complete GIS capabilities, AI-powered analytics, and automated workflows for field officers.** 
+
+---
+
+# 🎯 **NEW: MANAGER FIELD OFFICERS API**
+
+## 📋 **API Endpoint: Manager Field Officers**
+
+### **🌐 Endpoint Details**
+- **URL**: `GET /api/users/my-field-officers/`
+- **Method**: GET
+- **Authentication**: Required (JWT Token)
+- **Permission**: Manager Role Only
+- **Purpose**: Get all field officers created by the logged-in manager
+
+### **🔐 Authentication**
+```bash
+# Get OTP
+POST /api/users/send_otp/
+{
+    "email": "manager@example.com"
+}
+
+# Verify OTP and get token
+POST /api/users/verify_otp/
+{
+    "email": "manager@example.com",
+    "otp": "123456"
+}
+
+# Use token in header
+Authorization: Bearer <access_token>
+```
+
+### **📊 Response Format**
+```json
+{
+    "manager": {
+        "id": 1,
+        "username": "manager1",
+        "first_name": "John",
+        "last_name": "Manager",
+        "email": "manager@example.com"
+    },
+    "summary": {
+        "total_field_officers": 3,
+        "total_farmers": 15,
+        "total_plots": 25,
+        "total_farms": 20
+    },
+    "field_officers": [
+        {
+            "id": 2,
+            "username": "fieldofficer1",
+            "email": "fo1@example.com",
+            "first_name": "Alice",
+            "last_name": "Officer",
+            "phone_number": "+1234567890",
+            "address": "123 Main St",
+            "village": "Sample Village",
+            "state": "Maharashtra",
+            "district": "Ahmednagar",
+            "taluka": "Sangamner",
+            "profile_picture": null,
+            "created_by": {
+                "id": 1,
+                "username": "manager1",
+                "first_name": "John",
+                "last_name": "Manager",
+                "role": "manager"
+            },
+            "date_joined": "2024-08-25T10:00:00Z",
+            "last_login": "2024-08-25T15:30:00Z",
+            "farmers_count": 5,
+            "plots_count": 8,
+            "farms_count": 7
+        }
+    ]
+}
+```
+
+### **🎯 Key Features**
+
+#### **✅ Manager Information**
+- Complete manager profile details
+- Manager ID, username, name, email
+
+#### **✅ Summary Statistics**
+- Total field officers under the manager
+- Total farmers created by all field officers
+- Total plots registered by all field officers
+- Total farms established by all field officers
+
+#### **✅ Field Officer Details**
+- Complete field officer profiles
+- Contact information and addresses
+- Creation and last login timestamps
+- Performance metrics:
+  - **farmers_count**: Number of farmers created
+  - **plots_count**: Number of plots registered
+  - **farms_count**: Number of farms established
+
+#### **✅ Hierarchy Tracking**
+- **created_by**: Shows which manager created each field officer
+- Proper role-based access control
+- Manager can only see their own field officers
+
+### **🔧 Implementation Details**
+
+#### **Database Changes**
+```python
+# Added to User model
+created_by = models.ForeignKey(
+    'self',
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name='created_users',
+    help_text="Manager who created this user"
+)
+```
+
+#### **Serializer Features**
+```python
+class FieldOfficerSerializer(serializers.ModelSerializer):
+    # Auto-calculated statistics
+    farmers_count = serializers.SerializerMethodField()
+    plots_count = serializers.SerializerMethodField()
+    farms_count = serializers.SerializerMethodField()
+    
+    # Hierarchy information
+    created_by = serializers.SerializerMethodField()
+```
+
+#### **Permission Control**
+```python
+# Only managers can access this endpoint
+if not user.has_role('manager'):
+    return Response(
+        {'error': 'Only managers can access this endpoint'}, 
+        status=403
+    )
+```
+
+### **🚀 Usage Examples**
+
+#### **1. Get All Field Officers**
+```bash
+curl -X GET "http://localhost:8000/api/users/my-field-officers/" \
+  -H "Authorization: Bearer <your_jwt_token>" \
+  -H "Content-Type: application/json"
+```
+
+#### **2. Frontend Integration**
+```javascript
+// React/JavaScript example
+const getFieldOfficers = async () => {
+    const response = await fetch('/api/users/my-field-officers/', {
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+    
+    const data = await response.json();
+    console.log('Manager:', data.manager);
+    console.log('Summary:', data.summary);
+    console.log('Field Officers:', data.field_officers);
+};
+```
+
+#### **3. Dashboard Integration**
+```python
+# Django view example
+def manager_dashboard(request):
+    if request.user.has_role('manager'):
+        field_officers = User.objects.filter(
+            created_by=request.user,
+            role__name='fieldofficer'
+        )
+        context = {
+            'field_officers': field_officers,
+            'total_farmers': sum(fo.created_users.filter(role__name='farmer').count() 
+                               for fo in field_officers)
+        }
+        return render(request, 'manager_dashboard.html', context)
+```
+
+### **📈 Benefits**
+
+#### **For Managers:**
+- ✅ **Complete Overview**: See all field officers under their management
+- ✅ **Performance Tracking**: Monitor field officer productivity
+- ✅ **Hierarchy Management**: Maintain clear reporting structure
+- ✅ **Data Analytics**: Track farmers, plots, and farms creation
+
+#### **For System Administrators:**
+- ✅ **Access Control**: Proper role-based permissions
+- ✅ **Data Integrity**: Hierarchical data relationships
+- ✅ **Audit Trail**: Track who created whom
+- ✅ **Scalability**: Supports multiple managers and field officers
+
+#### **For Developers:**
+- ✅ **RESTful API**: Standard HTTP methods and responses
+- ✅ **JWT Authentication**: Secure token-based access
+- ✅ **Comprehensive Data**: All necessary information in one call
+- ✅ **Error Handling**: Proper HTTP status codes and error messages
+
+### **🔍 Testing**
+
+#### **Test Script Available**
+```bash
+# Run the test script
+python test_manager_api.py
+```
+
+#### **Manual Testing**
+1. Create a manager user in Django admin
+2. Create field officers under that manager
+3. Get manager's email and send OTP
+4. Use the API with authentication token
+5. Verify response contains correct field officers
+
+### **🎉 API Successfully Implemented!**
+
+**The Manager Field Officers API is now fully functional and ready for production use. Managers can now efficiently manage and monitor their field officers with comprehensive statistics and hierarchical data access.** 
+
+---
+
+# 💬 **TWO-WAY COMMUNICATION SYSTEM**
+
+## 📋 **Overview**
+
+The system provides a complete two-way messaging system with role-based communication rules. Users can send and receive messages based on their roles in the organizational hierarchy.
+
+## 🔐 **Communication Rules**
+
+The system enforces the following communication hierarchy:
+
+### **✅ Allowed Communication Paths:**
+
+1. **Owner ↔ Manager** (bidirectional)
+   - Owner can message Manager
+   - Manager can message Owner
+
+2. **Manager ↔ Field Officer** (bidirectional)
+   - Manager can message Field Officer
+   - Field Officer can message Manager
+
+3. **Field Officer ↔ Manager ↔ Owner** (multi-directional)
+   - Field Officer can message Manager
+   - Field Officer can message Owner
+   - Manager can message Field Officer
+   - Owner can message Field Officer
+
+4. **Field Officer ↔ Farmer** (bidirectional)
+   - Field Officer can message Farmer
+   - Farmer can message Field Officer
+
+5. **Farmer ↔ Field Officer** (bidirectional)
+   - Same as above (explicitly documented)
+
+### **🚫 Restricted Communications:**
+
+- Users cannot message themselves
+- Users can only communicate with roles specified in the communication rules
+- Superuser and Admin can communicate with anyone
+
+## 🌐 **API Endpoints**
+
+### **Base URL**: `/api/conversations/` and `/api/messages/`
+
+All endpoints require JWT authentication:
+```bash
+Authorization: Bearer <your_access_token>
+```
+
+---
+
+## 📨 **CONVERSATION ENDPOINTS**
+
+### **1. List All Conversations**
+
+Get all conversations for the authenticated user.
+
+**Endpoint**: `GET /api/conversations/`
+
+**Authentication**: Required (JWT Token)
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": 1,
+    "participant1": {
+      "id": 1,
+      "username": "owner1",
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "owner@example.com",
+      "role_name": "owner",
+      "role_display": "Owner"
+    },
+    "participant2": {
+      "id": 2,
+      "username": "manager1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "manager@example.com",
+      "role_name": "manager",
+      "role_display": "Manager"
+    },
+    "other_participant": {
+      "id": 2,
+      "username": "manager1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "manager@example.com",
+      "role_name": "manager",
+      "role_display": "Manager"
+    },
+    "last_message": {
+      "id": 10,
+      "sender": {
+        "id": 2,
+        "username": "manager1",
+        "first_name": "Jane",
+        "last_name": "Smith"
+      },
+      "content": "Latest message content",
+      "is_read": false,
+      "created_at": "2025-01-19T10:30:00Z"
+    },
+    "unread_count": 3,
+    "created_at": "2025-01-19T09:00:00Z",
+    "updated_at": "2025-01-19T10:30:00Z",
+    "last_message_at": "2025-01-19T10:30:00Z"
+  }
+]
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/conversations/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **2. Get or Create Conversation with Specific User**
+
+Get or create a conversation with a specific user.
+
+**Endpoint**: `GET /api/conversations/with-user/{user_id}/`
+
+**Authentication**: Required (JWT Token)
+
+**URL Parameters**:
+- `user_id` (integer, required): ID of the user to start conversation with
+
+**Response** (200 OK):
+```json
+{
+  "id": 1,
+  "participant1": {
+    "id": 1,
+    "username": "owner1",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "owner@example.com",
+    "role_name": "owner",
+    "role_display": "Owner"
+  },
+  "participant2": {
+    "id": 2,
+    "username": "manager1",
+    "first_name": "Jane",
+    "last_name": "Smith",
+    "email": "manager@example.com",
+    "role_name": "manager",
+    "role_display": "Manager"
+  },
+  "other_participant": {
+    "id": 2,
+    "username": "manager1",
+    "first_name": "Jane",
+    "last_name": "Smith"
+  },
+  "last_message": null,
+  "unread_count": 0,
+  "created_at": "2025-01-19T09:00:00Z",
+  "updated_at": "2025-01-19T09:00:00Z",
+  "last_message_at": null
+}
+```
+
+**Error Response** (403 Forbidden - Communication Not Allowed):
+```json
+{
+  "error": "You are not allowed to communicate with this user based on your roles."
+}
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/conversations/with-user/2/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **3. Get Messages in Conversation**
+
+Get all messages in a specific conversation.
+
+**Endpoint**: `GET /api/conversations/{conversation_id}/messages/`
+
+**Authentication**: Required (JWT Token)
+
+**URL Parameters**:
+- `conversation_id` (integer, required): ID of the conversation
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": 1,
+    "conversation": 1,
+    "sender": {
+      "id": 1,
+      "username": "owner1",
+      "first_name": "John",
+      "last_name": "Doe",
+      "email": "owner@example.com",
+      "role_name": "owner",
+      "role_display": "Owner"
+    },
+    "content": "Hello, how are you?",
+    "read_at": null,
+    "is_read": false,
+    "created_at": "2025-01-19T10:00:00Z",
+    "updated_at": "2025-01-19T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "conversation": 1,
+    "sender": {
+      "id": 2,
+      "username": "manager1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "email": "manager@example.com",
+      "role_name": "manager",
+      "role_display": "Manager"
+    },
+    "content": "I'm doing well, thank you!",
+    "read_at": "2025-01-19T10:05:00Z",
+    "is_read": true,
+    "created_at": "2025-01-19T10:05:00Z",
+    "updated_at": "2025-01-19T10:05:00Z"
+  }
+]
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/conversations/1/messages/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **4. Mark Conversation as Read**
+
+Mark all unread messages in a conversation as read.
+
+**Endpoint**: `POST /api/conversations/{conversation_id}/mark-read/`
+
+**Authentication**: Required (JWT Token)
+
+**URL Parameters**:
+- `conversation_id` (integer, required): ID of the conversation
+
+**Response** (200 OK):
+```json
+{
+  "message": "Marked 3 message(s) as read."
+}
+```
+
+**Example Request**:
+```bash
+curl -X POST "http://localhost:8000/api/conversations/1/mark-read/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+## 📩 **MESSAGE ENDPOINTS**
+
+### **1. Send a Message**
+
+Send a new message to a user. Creates a conversation if it doesn't exist.
+
+**Endpoint**: `POST /api/messages/`
+
+**Authentication**: Required (JWT Token)
+
+**Request Body**:
+```json
+{
+  "recipient_id": 2,
+  "content": "Hello, this is a test message."
+}
+```
+
+**Request Parameters**:
+- `recipient_id` (integer, required): ID of the user to send message to
+- `content` (string, required): Message content/text
+
+**Response** (201 Created):
+```json
+{
+  "id": 15,
+  "conversation": 1,
+  "sender": {
+    "id": 1,
+    "username": "owner1",
+    "first_name": "John",
+    "last_name": "Doe",
+    "email": "owner@example.com",
+    "role_name": "owner",
+    "role_display": "Owner"
+  },
+  "content": "Hello, this is a test message.",
+  "read_at": null,
+  "is_read": false,
+  "created_at": "2025-01-19T11:00:00Z",
+  "updated_at": "2025-01-19T11:00:00Z"
+}
+```
+
+**Error Response** (403 Forbidden - Communication Not Allowed):
+```json
+{
+  "error": "You are not allowed to communicate with this user based on your roles."
+}
+```
+
+**Error Response** (400 Bad Request - Invalid Data):
+```json
+{
+  "recipient_id": ["This field is required."],
+  "content": ["This field is required."]
+}
+```
+
+**Example Request**:
+```bash
+curl -X POST "http://localhost:8000/api/messages/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipient_id": 2,
+    "content": "Hello, this is a test message."
+  }'
+```
+
+---
+
+### **2. List All Messages**
+
+Get all messages for the authenticated user (across all conversations).
+
+**Endpoint**: `GET /api/messages/`
+
+**Authentication**: Required (JWT Token)
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": 1,
+    "conversation": 1,
+    "sender": {
+      "id": 1,
+      "username": "owner1",
+      "first_name": "John",
+      "last_name": "Doe",
+      "role_name": "owner"
+    },
+    "content": "Hello, how are you?",
+    "read_at": null,
+    "is_read": false,
+    "created_at": "2025-01-19T10:00:00Z",
+    "updated_at": "2025-01-19T10:00:00Z"
+  },
+  {
+    "id": 2,
+    "conversation": 1,
+    "sender": {
+      "id": 2,
+      "username": "manager1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "role_name": "manager"
+    },
+    "content": "I'm doing well, thank you!",
+    "read_at": "2025-01-19T10:05:00Z",
+    "is_read": true,
+    "created_at": "2025-01-19T10:05:00Z",
+    "updated_at": "2025-01-19T10:05:00Z"
+  }
+]
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/messages/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **3. Get Unread Message Count**
+
+Get total count of unread messages for the authenticated user.
+
+**Endpoint**: `GET /api/messages/unread-count/`
+
+**Authentication**: Required (JWT Token)
+
+**Response** (200 OK):
+```json
+{
+  "unread_count": 5
+}
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/messages/unread-count/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **4. Get Unread Messages**
+
+Get all unread messages for the authenticated user.
+
+**Endpoint**: `GET /api/messages/unread/`
+
+**Authentication**: Required (JWT Token)
+
+**Response** (200 OK):
+```json
+[
+  {
+    "id": 10,
+    "conversation": 1,
+    "sender": {
+      "id": 2,
+      "username": "manager1",
+      "first_name": "Jane",
+      "last_name": "Smith",
+      "role_name": "manager"
+    },
+    "content": "This is an unread message",
+    "read_at": null,
+    "is_read": false,
+    "created_at": "2025-01-19T10:30:00Z",
+    "updated_at": "2025-01-19T10:30:00Z"
+  }
+]
+```
+
+**Example Request**:
+```bash
+curl -X GET "http://localhost:8000/api/messages/unread/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+### **5. Mark Message as Read**
+
+Mark a specific message as read.
+
+**Endpoint**: `POST /api/messages/{message_id}/mark-read/`
+
+**Authentication**: Required (JWT Token)
+
+**URL Parameters**:
+- `message_id` (integer, required): ID of the message to mark as read
+
+**Response** (200 OK):
+```json
+{
+  "message": "Message marked as read."
+}
+```
+
+**Error Response** (403 Forbidden):
+```json
+{
+  "error": "You cannot mark your own message as read."
+}
+```
+
+**Example Request**:
+```bash
+curl -X POST "http://localhost:8000/api/messages/10/mark-read/" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+---
+
+## 🎯 **COMMUNICATION SCENARIOS**
+
+### **Scenario 1: Owner ↔ Manager Communication**
+
+**Owner sends message to Manager**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 2,  # Manager ID
+  "content": "Please provide a status update on field operations."
+}
+```
+
+**Manager responds to Owner**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 1,  # Owner ID
+  "content": "All field operations are running smoothly. We have registered 50 new farmers this month."
+}
+```
+
+---
+
+### **Scenario 2: Manager ↔ Field Officer Communication**
+
+**Manager sends message to Field Officer**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 3,  # Field Officer ID
+  "content": "Please complete the farmer registration for the Rajapur region by end of week."
+}
+```
+
+**Field Officer responds to Manager**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 2,  # Manager ID
+  "content": "Understood. I will complete the registrations by Friday."
+}
+```
+
+---
+
+### **Scenario 3: Field Officer ↔ Manager ↔ Owner Communication**
+
+**Field Officer sends message to Owner**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 1,  # Owner ID
+  "content": "I need additional resources for the upcoming harvest season."
+}
+```
+
+**Field Officer sends message to Manager**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 2,  # Manager ID
+  "content": "I have completed all farmer registrations for my assigned region."
+}
+```
+
+**Owner responds to Field Officer**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 3,  # Field Officer ID
+  "content": "I will review your request and get back to you."
+}
+```
+
+---
+
+### **Scenario 4: Field Officer ↔ Farmer Communication**
+
+**Field Officer sends message to Farmer**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 5,  # Farmer ID
+  "content": "Your irrigation system needs maintenance. Please schedule a visit."
+}
+```
+
+**Farmer responds to Field Officer**:
+```bash
+POST /api/messages/
+{
+  "recipient_id": 3,  # Field Officer ID
+  "content": "Thank you for the update. I will be available on Monday for the maintenance."
+}
+```
+
+---
+
+## 🔒 **PERMISSIONS & SECURITY**
+
+### **Role-Based Access Control**
+
+- **Owner**: Can communicate with Manager and Field Officer
+- **Manager**: Can communicate with Owner, Field Officer, and Farmer
+- **Field Officer**: Can communicate with Manager, Owner, and Farmer
+- **Farmer**: Can communicate with Field Officer
+- **Superuser/Admin**: Can communicate with anyone
+
+### **Security Features**
+
+- ✅ JWT Token Authentication required for all endpoints
+- ✅ Role-based communication rules enforced
+- ✅ Users can only access their own conversations and messages
+- ✅ Automatic conversation creation on first message
+- ✅ Read/unread status tracking
+- ✅ Unread message count per conversation
+
+---
+
+## 📊 **RESPONSE CODES**
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 OK | Request successful |
+| 201 Created | Message/conversation created successfully |
+| 400 Bad Request | Invalid request data |
+| 401 Unauthorized | Authentication required |
+| 403 Forbidden | Communication not allowed based on roles |
+| 404 Not Found | Conversation or message not found |
+
+---
+
+## 🚀 **USAGE EXAMPLES**
+
+### **Python Example**
+
+```python
+import requests
+
+# Base URL
+BASE_URL = "http://localhost:8000/api"
+TOKEN = "YOUR_ACCESS_TOKEN"
+
+headers = {
+    "Authorization": f"Bearer {TOKEN}",
+    "Content-Type": "application/json"
+}
+
+# Send a message
+def send_message(recipient_id, content):
+    url = f"{BASE_URL}/messages/"
+    data = {
+        "recipient_id": recipient_id,
+        "content": content
+    }
+    response = requests.post(url, json=data, headers=headers)
+    return response.json()
+
+# Get all conversations
+def get_conversations():
+    url = f"{BASE_URL}/conversations/"
+    response = requests.get(url, headers=headers)
+    return response.json()
+
+# Get messages in a conversation
+def get_messages(conversation_id):
+    url = f"{BASE_URL}/conversations/{conversation_id}/messages/"
+    response = requests.get(url, headers=headers)
+    return response.json()
+
+# Get unread count
+def get_unread_count():
+    url = f"{BASE_URL}/messages/unread-count/"
+    response = requests.get(url, headers=headers)
+    return response.json()
+```
+
+### **JavaScript/React Example**
+`1  qAzA
+```javascript
+const API_BASE = 'http://localhost:8000/api';
+
+// Send a message
+const sendMessage = async (recipientId, content) => {
+  const response = await fetch(`${API_BASE}/messages/`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      recipient_id: recipientId,
+      content: content
+    })
+  });
+  return await response.json();
+};
+
+// Get conversations
+const getConversations = async () => {
+  const response = await fetch(`${API_BASE}/conversations/`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  return await response.json();
+};
+
+// Get unread count
+const getUnreadCount = async () => {
+  const response = await fetch(`${API_BASE}/messages/unread-count/`, {
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  const data = await response.json();
+  return data.unread_count;
+};
+```
+
+---
+
+## 🎉 **FEATURES SUMMARY**
+
+✅ **Two-way communication** between all specified role pairs  
+✅ **Automatic conversation creation** when first message is sent  
+✅ **Read/unread status tracking** for all messages  
+✅ **Unread message count** per conversation and total  
+✅ **Role-based permissions** enforced automatically  
+✅ **RESTful API design** with standard HTTP methods  
+✅ **JWT authentication** for secure access  
+✅ **Real-time message updates** via conversation timestamps  
+✅ **Complete message history** per conversation  
+✅ **User-friendly error messages** for invalid communications  
+
+---
+
+## 📝 **NOTES**
+
+- Conversations are automatically created when the first message is sent
+- Messages are ordered chronologically (oldest first)
+- Conversations are ordered by last message time (most recent first)
+- Unread count only includes messages from the other participant
+- Users cannot mark their own messages as read
+- All timestamps are in ISO 8601 format (UTC)
+
+---
+
+**The Two-Way Communication System is fully implemented and ready for production use. All role-based communication rules are enforced automatically, ensuring secure and proper communication flow throughout the organizational hierarchy.**
+

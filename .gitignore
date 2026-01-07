@@ -1,0 +1,522 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+#Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.env.local
+.env.production
+.env.staging
+.env.save
+.env.local.backup
+render_env_template.txt
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+envm/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Django specific
+media/
+staticfiles/
+static/
+*.log
+*.sqlite3
+
+# # Django migrations (keep only initial migrations)
+# */migrations/0*.py
+# !*/migrations/__init__.py
+
+# Django secret key and sensitive settings
+.env
+.env.local
+.env.production
+.env.staging
+.env.render
+.env.render.local
+secrets.py
+local_settings.py
+production_settings.py
+staging_settings.py
+
+# Database files
+*.db
+*.sqlite3
+*.sqlite3-journal
+
+# Testing files
+test_*.py
+*_test.py
+test_*.html
+*_test.html
+performance_test.py
+performance_dashboard.html
+PERFORMANCE_TEST_RESULTS.md
+BACKEND_PERFORMANCE_REPORT.md
+
+# Testing directory
+testing/
+
+# Development and debugging files
+debug_*.py
+quick_*.py
+check_*.py
+create_*.py
+fix_*.py
+listuser.py
+setup_*.py
+refresh_*.py
+generate_*.py
+monitoring.py
+ET.py
+events.py
+field.py
+soil.py
+main.py
+managerDash.py
+Admin.py
+agronomist_bot.py
+local_llama_chat.py
+utilsbot.py
+
+# Documentation files (keep only essential ones)
+*.md
+!README.md
+!DEPLOYMENT.md
+
+# Log files
+*.log
+field_corrected.log
+field.log
+soil.log
+
+# Model files (large files)
+model/
+*.gguf
+*.bin
+*.safetensors
+
+# Postman collections and test files
+*.json
+!package.json
+!package-lock.json
+!requirements.txt
+!Pipfile
+
+# Shell scripts
+!deploy.sh
+!start.sh
+!fix_migrations.py
+!create_initial_migration.py
+!fix_users_migration.py
+!create_database_schema.py
+!create_tables_raw_sql.py
+!create_all_tables.py
+!entrypoint.sh
+
+# Locust testing files
+locustfile.py
+locust_config.py
+locust_requirements.txt
+run_locust_tests.sh
+README_LOCUST_SETUP.md
+LOCUST_PERFORMANCE_TESTING_GUIDE.md
+LOCUST_QUICK_REFERENCE.md
+
+# Monitoring files
+monitoring_requirements.txt
+QUICK_MONITORING_GUIDE.md
+
+# Temporary files
+*.tmp
+*.temp
+output_merged.geojson
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Railway deployment
+.railway/
+
+# Docker
+# docker-compose.yml
+# docker-compose.override.yml
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Cache directories
+.cache/
+.pytest_cache/
+.coverage
+
+# Node.js (if you have any frontend components)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# API keys and credentials
+api_keys.py
+credentials.py
+config.py
+secrets.json
+credentials.json
+
+# Uploaded files
+uploads/
+user_uploads/
+media/uploads/
+
+# Generated files
+generated/
+output/
+temp/
+
+# Local development files
+local_*
+dev_*
+development_*
+
+# Performance monitoring
+*.prof
+*.profile
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Virtual environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+envm/
+
+# PyCharm
+.idea/
+
+# VS Code
+.vscode/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
+
+# MacOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+*.stackdump
+[Dd]esktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Project specific files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+envm/
+
+# Django specific
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+staticfiles/
+static/
+
+# Farm management specific
+test_*.py
+*_test.py
+debug_*.py
+quick_*.py
+check_*.py
+create_*.py
+fix_*.py
+setup_*.py
+refresh_*.py
+generate_*.py
+monitoring.py
+main.py
+Admin.py
+agronomist_bot.py
+local_llama_chat.py
+utilsbot.py
+
+# Documentation (keep only essential)
+*.md
+!README.md
+!DEPLOYMENT.md
+
+# Log files
+*.log
+field_corrected.log
+field.log
+soil.log
+
+# Model files
+model/
+*.gguf
+*.bin
+*.safetensors
+
+# Test files
+test_*.py
+*_test.py
+test_*.html
+*_test.html
+performance_test.py
+performance_dashboard.html
+PERFORMANCE_TEST_RESULTS.md
+BACKEND_PERFORMANCE_REPORT.md
+
+# Temporary files
+*.tmp
+*.temp
+output_merged.geojson
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Deployment
+.railway/
+
+# SSL certificates
+*.pem
+*.key
+*.crt
+*.csr
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Cache directories
+.cache/
+.pytest_cache/
+.coverage
+
+# API keys and credentials
+api_keys.py
+credentials.py
+config.py
+secrets.json
+credentials.json
+
+# Uploaded files
+uploads/
+user_uploads/
+media/uploads/
+
+# Generated files
+generated/
+output/
+temp/
+
+# Local development files
+local_*
+dev_*
+development_*
+
+# Performance monitoring
+*.prof
+*.profile
+# Additional environment file protections
+.env.hosted
+.env.render
+.env.local.backup*
+env.example

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farm Registration - Farm Management System</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    
+    <!-- Leaflet Draw CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css" crossorigin=""/>
+    
+    <!-- Main CSS -->
+    <link rel="stylesheet" href="../styles.css">
+    
+    <!-- Farm Registration CSS -->
+    <style>
+        #map-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        #farm-map {
+            width: 100%;
+            height: 500px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        
+        .map-overlay {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+        
+        .map-instructions {
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #f1f9ff;
+            border-left: 3px solid #3498db;
+        }
+        
+        .coord-display {
+            margin-top: 10px;
+            font-family: monospace;
+        }
+        
+        .irrigation-specific-fields {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        
+        .irrigation-specific-fields h4 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #bdc3c7;
+            padding-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        .help-text {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-top: 2px;
+        }
+        
+        .calculation-display {
+            background-color: #e8f5e8;
+            border: 1px solid #4caf50;
+            border-radius: 4px;
+            padding: 10px;
+            font-weight: bold;
+            color: #2e7d32;
+            text-align: center;
+        }
+        
+        .form-row {
+            display: flex;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        .form-row .form-group {
+            flex: 1;
+            margin-right: 10px;
+        }
+        
+        .form-row .form-group:last-child {
+            margin-right: 0;
+        }
+        
+        .form-tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            margin-bottom: 20px;
+        }
+        
+        .form-tab {
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 4px 4px 0 0;
+        }
+        
+        .form-tab.active {
+            border-color: #ddd;
+            background: #f9f9f9;
+            font-weight: bold;
+        }
+        
+        .form-section {
+            display: none;
+        }
+        
+        .form-section.active {
+            display: block;
+        }
+        
+        .btn-section {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Farm Management System</h1>
+            <nav>
+                <ul>
+                    <li><a href="../index.html">Dashboard</a></li>
+                    <li><a href="#users">Users</a></li>
+                    <li><a href="#tasks">Tasks</a></li>
+                    <li><a href="#equipment">Equipment</a></li>
+                    <li><a href="#bookings">Bookings</a></li>
+                    <li><a href="#farms" class="active">Farms</a></li>
+                </ul>
+            </nav>
+            <div class="user-info">
+                <span id="username">User</span>
+                <button id="logout-btn">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="container">
+            <section id="farm-registration-section">
+                <div class="section-header">
+                    <h2>Farm Registration</h2>
+                    <button id="view-farms-btn" class="btn secondary-btn">View All Farms</button>
+                </div>
+                
+                <div class="form-tabs">
+                    <div class="form-tab active" data-tab="basic-info">Basic Information</div>
+                    <div class="form-tab" data-tab="location">Location & Boundary</div>
+                    <div class="form-tab" data-tab="details">Farm Details</div>
+                </div>
+                
+                <form id="farm-registration-form">
+                    <div id="basic-info-section" class="form-section active">
+                        <div class="form-group">
+                            <label for="farm-name">Farm Name*</label>
+                            <input type="text" id="farm-name" name="name" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="farm-description">Description</label>
+                            <textarea id="farm-description" name="description" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="farm-address">Address*</label>
+                            <textarea id="farm-address" name="address" required rows="2"></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="farm-area">Area Size (Acres)*</label>
+                            <input type="number" id="farm-area" name="area_size" min="0.01" step="0.01" required>
+                        </div>
+                        
+                        <div class="btn-section">
+                            <div></div>
+                            <button type="button" class="btn primary-btn next-tab" data-next="location">Next: Location</button>
+                        </div>
+                    </div>
+                    
+                    <div id="location-section" class="form-section">
+                        <div class="map-instructions">
+                            <h3>Map Instructions</h3>
+                            <p>Use the tools on the right side of the map to:</p>
+                            <ul>
+                                <li>Place a marker for the main farm location</li>
+                                <li>Draw a polygon to define farm boundaries</li>
+                                <li>Edit shapes by selecting them first</li>
+                            </ul>
+                            <p>You can also search for a location using the search box above the map.</p>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="location-search">Search Location</label>
+                            <div class="search-bar">
+                                <input type="text" id="location-search" placeholder="Search for a location...">
+                                <button type="button" id="search-btn" class="btn primary-btn">Search</button>
+                            </div>
+                        </div>
+                        
+                        <div id="map-container">
+                            <div id="farm-map"></div>
+                            
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label>Main Location Coordinates:</label>
+                                    <div id="location-coordinates" class="coord-display">Not set</div>
+                                </div>
+                                <div class="form-group">
+                                    <label>Boundary Vertices:</label>
+                                    <div id="boundary-vertices" class="coord-display">0 points</div>
+                                </div>
+                            </div>
+                            
+                            <input type="hidden" id="location-lat" name="location_lat">
+                            <input type="hidden" id="location-lng" name="location_lng">
+                            <input type="hidden" id="boundary-geojson" name="boundary">
+                        </div>
+                        
+                        <div class="btn-section">
+                            <button type="button" class="btn secondary-btn prev-tab" data-prev="basic-info">Previous: Basic Info</button>
+                            <button type="button" class="btn primary-btn next-tab" data-next="details">Next: Details</button>
+                        </div>
+                    </div>
+                    
+                    <div id="details-section" class="form-section">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="soil-type">Soil Type</label>
+                                <select id="soil-type" name="soil_type_id">
+                                    <option value="">Select Soil Type</option>
+                                    <!-- Will be populated dynamically -->
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="crop-type">Crop Type</label>
+                                <select id="crop-type" name="crop_type_id">
+                                    <option value="">Select Crop Type</option>
+                                    <!-- Will be populated dynamically -->
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="plantation-type">Plantation Type</label>
+                                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                    <select id="plantation-type" name="plantation_type" style="flex: 1;">
+                                        <option value="">Select Plantation Type</option>
+                                        <!-- Will be populated dynamically -->
+                                    </select>
+                                    <button type="button" id="add-plantation-type-btn" class="btn primary-btn" style="padding: 10px 15px; min-width: 45px; font-size: 18px; font-weight: bold; line-height: 1;" title="Add New Plantation Type">+</button>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="planting-method">Planting Method</label>
+                                <div style="display: flex; gap: 8px; align-items: flex-end;">
+                                    <select id="planting-method" name="planting_method" style="flex: 1;">
+                                        <option value="">Select Planting Method</option>
+                                        <!-- Will be populated dynamically -->
+                                    </select>
+                                    <button type="button" id="add-planting-method-btn" class="btn primary-btn" style="padding: 10px 15px; min-width: 45px; font-size: 18px; font-weight: bold; line-height: 1;" title="Add New Planting Method">+</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="spacing-a">Spacing A (meters)*</label>
+                                <input type="number" id="spacing-a" name="spacing_a" min="0.01" step="0.01" required>
+                                <small class="help-text">Distance between rows</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="spacing-b">Spacing B (meters)*</label>
+                                <input type="number" id="spacing-b" name="spacing_b" min="0.01" step="0.01" required>
+                                <small class="help-text">Distance between plants in a row</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Calculated Plants in Field:</label>
+                            <div id="plants-calculation" class="calculation-display">Enter spacing values to calculate</div>
+                        </div>
+                        
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="irrigation-type">Irrigation Type</label>
+                                <select id="irrigation-type" name="irrigation_type" required>
+                                    <option value="none">None</option>
+                                    <option value="drip">Drip Irrigation</option>
+                                    <option value="flood">Flood Irrigation</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        
+                        <!-- Flood Irrigation Fields -->
+                        <div id="flood-irrigation-fields" class="irrigation-specific-fields" style="display: none;">
+                            <h4>Flood Irrigation Details</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="motor-horsepower">Motor Horsepower</label>
+                                    <input type="number" id="motor-horsepower" name="motor_horsepower" step="0.1" min="0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="pipe-width">Pipe Width (inches)</label>
+                                    <input type="number" id="pipe-width" name="pipe_width_inches" step="0.1" min="0">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="distance-motor">Distance from Motor to Plot (meters)</label>
+                                <input type="number" id="distance-motor" name="distance_motor_to_plot_m" step="0.1" min="0">
+                            </div>
+                        </div>
+                        
+                        <!-- Drip Irrigation Fields -->
+                        <div id="drip-irrigation-fields" class="irrigation-specific-fields" style="display: none;">
+                            <h4>Drip Irrigation Details</h4>
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label for="plants-per-acre">Plants per Acre</label>
+                                    <input type="number" id="plants-per-acre" name="plants_per_acre" min="0">
+                                </div>
+                                <div class="form-group">
+                                    <label for="flow-rate">Flow Rate (L/hr)</label>
+                                    <input type="number" id="flow-rate" name="flow_rate_lph" step="0.1" min="0">
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="emitters-count">Emitters Count</label>
+                                <input type="number" id="emitters-count" name="emitters_count" min="0">
+                            </div>
+                        </div>
+                        
+                        <div class="btn-section">
+                            <button type="button" class="btn secondary-btn prev-tab" data-prev="location">Previous: Location</button>
+                            <button type="submit" class="btn primary-btn">Register Farm</button>
+                        </div>
+                    </div>
+                </form>
+            </section>
+            
+            <section id="farms-list-section" class="hidden">
+                <div class="section-header">
+                    <h2>Your Farms</h2>
+                    <button id="add-farm-btn" class="btn primary-btn">Add New Farm</button>
+                </div>
+                
+                <div class="search-bar">
+                    <input type="text" id="farm-search" placeholder="Search farms...">
+                </div>
+                
+                <div id="farms-map-container" style="height: 400px; margin-bottom: 20px;">
+                    <div id="farms-map" style="width: 100%; height: 100%;"></div>
+                </div>
+                
+                <table class="data-table" id="farms-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Area (ha)</th>
+                            <th>Location</th>
+                            <th>Soil Type</th>
+                            <th>Irrigation</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Will be populated dynamically -->
+                    </tbody>
+                </table>
+            </section>
+            
+            <section id="farm-details-section" class="hidden">
+                <div class="section-header">
+                    <h2>Farm Details</h2>
+                    <div>
+                        <button id="edit-farm-btn" class="btn secondary-btn">Edit Farm</button>
+                        <button id="back-to-farms-btn" class="btn text-btn">Back to Farms</button>
+                    </div>
+                </div>
+                
+                <div id="farm-details-content"></div>
+                
+                <div class="form-tabs farm-details-tabs">
+                    <div class="form-tab active" data-tab="plots">Plots</div>
+                    <div class="form-tab" data-tab="sensors">Sensors</div>
+                    <div class="form-tab" data-tab="images">Images</div>
+                </div>
+                
+                <div id="plots-section" class="form-section active">
+                    <div class="section-header">
+                        <h3>Farm Plots</h3>
+                        <button id="add-plot-btn" class="btn primary-btn">Add Plot</button>
+                    </div>
+                    
+                    <div id="plots-map-container" style="height: 400px; margin-bottom: 20px;">
+                        <div id="plots-map" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <table class="data-table" id="plots-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Area (ha)</th>
+                                <th>Current Crop</th>
+                                <th>Planting Date</th>
+                                <th>Expected Harvest</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="sensors-section" class="form-section">
+                    <div class="section-header">
+                        <h3>Farm Sensors</h3>
+                        <button id="add-sensor-btn" class="btn primary-btn">Add Sensor</button>
+                    </div>
+                    
+                    <div id="sensors-map-container" style="height: 400px; margin-bottom: 20px;">
+                        <div id="sensors-map" style="width: 100%; height: 100%;"></div>
+                    </div>
+                    
+                    <table class="data-table" id="sensors-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Installation Date</th>
+                                <th>Last Maintenance</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Will be populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div id="images-section" class="form-section">
+                    <div class="section-header">
+                        <h3>Farm Images</h3>
+                        <button id="add-image-btn" class="btn primary-btn">Add Image</button>
+                    </div>
+                    
+                    <div class="image-gallery" id="image-gallery">
+                        <!-- Will be populated dynamically -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2023 Farm Management System</p>
+        </div>
+    </footer>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    
+    <!-- Leaflet Draw JS -->
+    <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js" crossorigin=""></script>
+    
+    <!-- Main Scripts -->
+    <script src="../script.js"></script>
+    
+    <!-- Farm Registration Scripts -->
+    <script src="./farm-script.js"></script>
+</body>
+</html> 
