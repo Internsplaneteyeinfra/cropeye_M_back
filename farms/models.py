@@ -102,6 +102,13 @@ class CropType(models.Model):
     Crop types (e.g., Sugarcane, Wheat, Rice, etc.)
     Uses CharField with choices for plantation_type and planting_method
     """
+    CROP_CATEGORY_CHOICES = [
+        ('sugarcane', 'Sugarcane'),
+        ('grapes', 'Grapes'),
+        ('wheat', 'Wheat'),
+        ('rice', 'Rice'),
+        ('other', 'Other'),
+    ]
     PLANTATION_TYPE_CHOICES = [
         ('adsali',         'Adsali'),
         ('suru',           'Suru'),
@@ -132,6 +139,12 @@ class CropType(models.Model):
         max_length=100,
         blank=True,
         help_text="Name of the crop type"
+    )
+    crop_category = models.CharField(
+        max_length=50,
+        choices=CROP_CATEGORY_CHOICES,
+        default='sugarcane',
+        help_text="Category of crop (determines which fields to show)"
     )
     plantation_type = models.CharField(
         max_length=100,
@@ -434,6 +447,97 @@ class Farm(models.Model):
         null=True,
         blank=True,
         help_text="Crop variety (e.g., Co 86032, Co 8371, etc.)"
+    )
+    
+    # Grapes-specific fields
+    variety_type = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=[
+            ('pre_season', 'Pre-Season'),
+            ('seasonal', 'Seasonal'),
+        ],
+        help_text="Variety type (Grapes only)"
+    )
+    variety_subtype = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=[
+            ('wine', 'Wine Grapes'),
+            ('table', 'Table Grapes'),
+        ],
+        help_text="Variety subtype (Grapes only)"
+    )
+    variety_timing = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=[
+            ('early', 'Early'),
+            ('late', 'Late'),
+        ],
+        help_text="Variety timing (Grapes only)"
+    )
+    plant_age = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=[
+            ('0-2', '0-2 years'),
+            ('2-3', '2-3 years'),
+            ('above_3', 'Above 3 years'),
+        ],
+        help_text="Plant age (Grapes only)"
+    )
+    foundation_pruning_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Foundation pruning date (Grapes only)"
+    )
+    fruit_pruning_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Fruit pruning date (Grapes only)"
+    )
+    last_harvesting_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Last harvesting date (Grapes only)"
+    )
+    resting_period_days = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Resting period in days (Grapes only)"
+    )
+    
+    # Enhanced irrigation fields for grapes (drip-specific)
+    row_spacing = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Row spacing in meters (Grapes drip irrigation)"
+    )
+    plant_spacing = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Plant spacing in meters (Grapes drip irrigation)"
+    )
+    flow_rate_liter_per_hour = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Flow rate in liters/hour (Grapes drip irrigation)"
+    )
+    emitters_per_plant = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Number of emitters per plant (Grapes drip irrigation)"
     )
     
     created_at    = models.DateTimeField(auto_now_add=True)

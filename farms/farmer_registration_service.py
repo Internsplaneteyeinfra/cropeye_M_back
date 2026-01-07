@@ -442,6 +442,18 @@ class CompleteFarmerRegistrationService:
             # Find or create CropType that matches BOTH crop name AND plantation data
             crop_type_name = farm_data['crop_type_name']
             
+            # Determine crop_category from crop_type_name (case-insensitive)
+            crop_category = 'sugarcane'  # default
+            crop_type_name_lower = crop_type_name.lower() if crop_type_name else ''
+            if 'grapes' in crop_type_name_lower or 'grape' in crop_type_name_lower:
+                crop_category = 'grapes'
+            elif 'wheat' in crop_type_name_lower:
+                crop_category = 'wheat'
+            elif 'rice' in crop_type_name_lower:
+                crop_category = 'rice'
+            elif farm_data.get('crop_category'):
+                crop_category = farm_data.get('crop_category')
+            
             # Get industry from field officer
             industry = get_user_industry(field_officer) if field_officer else None
             
@@ -451,8 +463,14 @@ class CompleteFarmerRegistrationService:
                 plantation_type=plantation_type_str if plantation_type_str else '',
                 planting_method=planting_method_str if planting_method_str else '',
                 industry=industry,
-                defaults={}
+                defaults={'crop_category': crop_category}
             )
+            
+            # Update crop_category if it was not set or needs updating
+            if not created and crop_type.crop_category != crop_category:
+                crop_type.crop_category = crop_category
+                crop_type.save()
+                logger.info(f"Updated CropType '{crop_type_name}' crop_category to '{crop_category}'")
             
             if created:
                 logger.info(f"Created CropType '{crop_type_name}' with plantation_type={plantation_type_str}, planting_method={planting_method_str}, industry={industry}")
@@ -512,10 +530,46 @@ class CompleteFarmerRegistrationService:
         if crop_variety == '':
             crop_variety = None
         
+        # Helper function to parse dates (similar to plantation_date parsing)
+        def parse_date_field(date_input, field_name):
+            """Parse date field from various formats"""
+            if not date_input:
+                return None
+            try:
+                from datetime import datetime
+                if isinstance(date_input, str):
+                    date_formats = ['%Y-%m-%d', '%Y/%m/%d', '%d-%m-%Y', '%d/%m/%Y', '%m-%d-%Y', '%m/%d/%Y']
+                    for date_format in date_formats:
+                        try:
+                            return datetime.strptime(date_input.strip(), date_format).date()
+                        except ValueError:
+                            continue
+                    logger.warning(f"Could not parse {field_name} date: {date_input}")
+                    return None
+                elif hasattr(date_input, 'date'):
+                    return date_input.date() if hasattr(date_input, 'date') else date_input
+                else:
+                    return date_input
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid {field_name} date format: {date_input}. Error: {str(e)}")
+                return None
+        
+        # Parse grapes-specific dates
+        foundation_pruning_date = parse_date_field(farm_data.get('foundation_pruning_date'), 'foundation_pruning_date')
+        fruit_pruning_date = parse_date_field(farm_data.get('fruit_pruning_date'), 'fruit_pruning_date')
+        last_harvesting_date = parse_date_field(farm_data.get('last_harvesting_date'), 'last_harvesting_date')
+        
         # Get industry from field officer
         industry = get_user_industry(field_officer) if field_officer else None
         
-        # Create farm
+        # Determine crop category to decide which fields to save
+        crop_category = None
+        if crop_type and hasattr(crop_type, 'crop_category'):
+            crop_category = crop_type.crop_category
+        elif farm_data.get('crop_category'):
+            crop_category = farm_data.get('crop_category')
+        
+        # Create farm with all fields
         farm = Farm.objects.create(
             address=farm_data['address'],
             area_size=farm_data['area_size'],
@@ -528,10 +582,27 @@ class CompleteFarmerRegistrationService:
             spacing_a=farm_data.get('spacing_a'),
             spacing_b=farm_data.get('spacing_b'),
             crop_variety=crop_variety,
-            industry=industry  # Assign industry from field officer
+            industry=industry,  # Assign industry from field officer
+            # Grapes-specific fields
+            variety_type=farm_data.get('variety_type'),
+            variety_subtype=farm_data.get('variety_subtype'),
+            variety_timing=farm_data.get('variety_timing'),
+            plant_age=farm_data.get('plant_age'),
+            foundation_pruning_date=foundation_pruning_date,
+            fruit_pruning_date=fruit_pruning_date,
+            last_harvesting_date=last_harvesting_date,
+            resting_period_days=farm_data.get('resting_period_days'),
+            row_spacing=farm_data.get('row_spacing'),
+            plant_spacing=farm_data.get('plant_spacing'),
+            flow_rate_liter_per_hour=farm_data.get('flow_rate_liter_per_hour'),
+            emitters_per_plant=farm_data.get('emitters_per_plant'),
         )
         
-        logger.info(f"Created farm: {farm.farm_uid} (ID: {farm.id}) for farmer {farmer.username} with plantation_date: {plantation_date}, crop_variety: {crop_variety}")
+        logger.info(
+            f"Created farm: {farm.farm_uid} (ID: {farm.id}) for farmer {farmer.username} "
+            f"with crop_category: {crop_category}, plantation_date: {plantation_date}, "
+            f"crop_variety: {crop_variety}"
+        )
         return farm
     
     @staticmethod

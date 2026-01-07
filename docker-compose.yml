@@ -35,7 +35,7 @@ services:
       # Hosted database configuration
       - DB_HOST=dev-et.cropeye.ai
       - DB_PORT=5432
-      - DB_NAME=CROPDB_TEST
+      - DB_NAME=crop_mobile_back
       - DB_USER=farm_management_l1wj_user
       - DB_PASSWORD=DySO3fcTFjb8Rgp9IZIxGYgLZ7KxwmjL
       - ALLOWED_HOSTS=* # Allow all hosts for local network access

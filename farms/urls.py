@@ -13,6 +13,7 @@ from .views import (
     FarmImageViewSet,
     FarmSensorViewSet,
     FarmIrrigationViewSet,
+    get_crop_fields_config,
 )
 
 router = DefaultRouter()
@@ -28,4 +29,5 @@ router.register('farm-irrigations', FarmIrrigationViewSet,  basename='farmirriga
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
 ]

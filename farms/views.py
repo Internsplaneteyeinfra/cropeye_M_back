@@ -5,7 +5,7 @@ from django.contrib.gis.measure import D
 from django.db import models
 from datetime import date, timedelta
 from rest_framework import viewsets, permissions
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from users.multi_tenant_utils import filter_by_industry, get_user_industry
@@ -1329,3 +1329,62 @@ class FarmIrrigationViewSet(viewsets.ModelViewSet):
             }
 
         return Response(result)
+
+
+@api_view(['GET'])
+def get_crop_fields_config(request):
+    """
+    Returns field configuration based on crop category.
+    Frontend can use this to dynamically show/hide fields.
+    
+    Query params:
+        crop_category: 'sugarcane', 'grapes', etc. (default: 'sugarcane')
+    """
+    crop_category = request.query_params.get('crop_category', 'sugarcane')
+    
+    field_configs = {
+        'sugarcane': {
+            'required_fields': ['plantation_date', 'spacing_a', 'spacing_b'],
+            'optional_fields': ['crop_variety', 'plantation_type', 'planting_method'],
+            'irrigation_fields': ['irrigation_type', 'motor_horsepower', 'pipe_width_inches'],
+            'hidden_fields': [
+                'variety_type', 'variety_subtype', 'variety_timing',
+                'plant_age', 'foundation_pruning_date', 'fruit_pruning_date',
+                'last_harvesting_date', 'resting_period_days',
+                'row_spacing', 'plant_spacing', 'flow_rate_liter_per_hour', 'emitters_per_plant'
+            ],
+            'visible_fields': [
+                'address', 'area_size', 'soil_type', 'crop_type',
+                'plantation_date', 'spacing_a', 'spacing_b', 'crop_variety'
+            ]
+        },
+        'grapes': {
+            'required_fields': ['plantation_date', 'location', 'soil_type'],
+            'optional_fields': [
+                'variety_type', 'variety_subtype', 'variety_timing',
+                'plant_age', 'foundation_pruning_date', 'fruit_pruning_date',
+                'last_harvesting_date', 'resting_period_days'
+            ],
+            'irrigation_fields': [
+                'irrigation_type', 'row_spacing', 'plant_spacing',
+                'flow_rate_liter_per_hour', 'emitters_per_plant'
+            ],
+            'hidden_fields': [
+                'spacing_a', 'spacing_b', 'plantation_type', 'planting_method'
+            ],
+            'visible_fields': [
+                'address', 'area_size', 'soil_type', 'crop_type',
+                'plantation_date', 'variety_type', 'variety_subtype', 'variety_timing',
+                'plant_age', 'foundation_pruning_date', 'fruit_pruning_date',
+                'last_harvesting_date', 'resting_period_days',
+                'row_spacing', 'plant_spacing', 'flow_rate_liter_per_hour', 'emitters_per_plant'
+            ]
+        }
+    }
+    
+    config = field_configs.get(crop_category, field_configs['sugarcane'])
+    
+    return Response({
+        'crop_category': crop_category,
+        'field_config': config
+    })

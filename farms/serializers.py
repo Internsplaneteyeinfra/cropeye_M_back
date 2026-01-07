@@ -457,6 +457,20 @@ class FarmSerializer(serializers.ModelSerializer):
     
     # Spacing fields and calculated plants
     plants_in_field = serializers.ReadOnlyField()
+    
+    # Grapes-specific fields
+    variety_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    variety_subtype = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    variety_timing = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    plant_age = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    foundation_pruning_date = serializers.DateField(required=False, allow_null=True)
+    fruit_pruning_date = serializers.DateField(required=False, allow_null=True)
+    last_harvesting_date = serializers.DateField(required=False, allow_null=True)
+    resting_period_days = serializers.IntegerField(required=False, allow_null=True)
+    row_spacing = serializers.DecimalField(required=False, allow_null=True, max_digits=8, decimal_places=2)
+    plant_spacing = serializers.DecimalField(required=False, allow_null=True, max_digits=8, decimal_places=2)
+    flow_rate_liter_per_hour = serializers.DecimalField(required=False, allow_null=True, max_digits=10, decimal_places=2)
+    emitters_per_plant = serializers.IntegerField(required=False, allow_null=True)
 
     class Meta:
         model = Farm
@@ -480,6 +494,19 @@ class FarmSerializer(serializers.ModelSerializer):
             'spacing_b',
             'crop_variety',
             'plants_in_field',
+            # Grapes-specific fields
+            'variety_type',
+            'variety_subtype',
+            'variety_timing',
+            'plant_age',
+            'foundation_pruning_date',
+            'fruit_pruning_date',
+            'last_harvesting_date',
+            'resting_period_days',
+            'row_spacing',
+            'plant_spacing',
+            'flow_rate_liter_per_hour',
+            'emitters_per_plant',
             'created_at',
             'updated_at',
         ]
@@ -514,15 +541,40 @@ class FarmSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
     
     def to_representation(self, instance):
-        # Override to pass farm instance to CropTypeSerializer
+        # Override to pass farm instance to CropTypeSerializer and conditionally show/hide fields
         representation = super().to_representation(instance)
+        
+        # Get crop category from crop_type
+        crop_category = None
+        if instance.crop_type and hasattr(instance.crop_type, 'crop_category'):
+            crop_category = instance.crop_type.crop_category
+        
+        # Conditionally hide/show fields based on crop category
+        if crop_category != 'grapes':
+            # Hide grapes-specific fields for non-grapes crops
+            grapes_fields = [
+                'variety_type', 'variety_subtype', 'variety_timing',
+                'plant_age', 'foundation_pruning_date', 'fruit_pruning_date',
+                'last_harvesting_date', 'resting_period_days',
+                'row_spacing', 'plant_spacing', 'flow_rate_liter_per_hour', 'emitters_per_plant'
+            ]
+            for field in grapes_fields:
+                representation.pop(field, None)
+        
+        if crop_category == 'grapes':
+            # Hide sugarcane-specific fields for grapes
+            sugarcane_fields = ['spacing_a', 'spacing_b']
+            for field in sugarcane_fields:
+                representation.pop(field, None)
+        
+        # Pass farm instance to crop_type serializer context
         if 'crop_type' in representation and instance.crop_type:
-            # Pass farm instance to crop_type serializer context
             crop_type_serializer = CropTypeSerializer(
                 instance.crop_type,
                 context={'farm': instance, **self.context}
             )
             representation['crop_type'] = crop_type_serializer.data
+        
         return representation
 
 
