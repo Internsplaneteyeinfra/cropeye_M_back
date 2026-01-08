@@ -863,3 +863,111 @@ class ChangePasswordSerializer(serializers.Serializer):
         if data['new_password'] != data['confirm_password']:
             raise serializers.ValidationError("New passwords must match.")
         return data
+
+
+class SimpleUserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, required=True, min_length=6)
+    
+    class Meta:
+        model = User
+        fields = [
+            'id',
+            'first_name',
+            'last_name',
+            'email',
+            'phone_number',
+            'state',
+            'district',
+            'taluka',
+            'password',
+            'username',
+            'role',
+            'industry',
+            'created_at',
+            'updated_at'
+        ]
+        read_only_fields = ['id', 'role', 'industry', 'created_at', 'updated_at']
+        extra_kwargs = {
+            'email': {'required': True},
+            'first_name': {'required': True},
+            'last_name': {'required': True},
+            'phone_number': {'required': True},
+            'state': {'required': False},
+            'district': {'required': False},
+            'taluka': {'required': False},
+        }
+    
+    def validate_phone_number(self, value):
+        """Validate phone number format (10 digits for India) and handle +91 country code"""
+        import re
+        if value:
+            # Remove all non-digit characters
+            cleaned_phone = re.sub(r'\D', '', value)
+            
+            # If starts with 91 (country code), remove it to get 10 digits
+            if cleaned_phone.startswith('91') and len(cleaned_phone) == 12:
+                cleaned_phone = cleaned_phone[2:]
+            
+            # Validate it's exactly 10 digits
+            if len(cleaned_phone) != 10:
+                raise serializers.ValidationError("Phone number must be exactly 10 digits (or 12 digits with +91).")
+            
+            # Check if phone number already exists
+            if User.objects.filter(phone_number=cleaned_phone).exists():
+                raise serializers.ValidationError("A user with this phone number already exists.")
+            
+            return cleaned_phone
+        raise serializers.ValidationError("Phone number is required.")
+    
+    def validate_email(self, value):
+        """Ensure email is unique"""
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
+    
+    def create(self, validated_data):
+        """Create a farmer user with automatic role assignment"""
+        from .models import Role
+        
+        password = validated_data.pop('password')
+        
+        # Get or create farmer role
+        try:
+            farmer_role = Role.objects.get(name='farmer')
+        except Role.DoesNotExist:
+            raise serializers.ValidationError({
+                'role': 'Farmer role not found in system. Please contact administrator.'
+            })
+        
+        # Auto-generate username if not provided
+        if 'username' not in validated_data or not validated_data.get('username'):
+            if validated_data.get('email'):
+                base_username = validated_data['email'].split('@')[0]
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                validated_data['username'] = username
+            elif validated_data.get('phone_number'):
+                base_username = f"farmer_{validated_data['phone_number']}"
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                validated_data['username'] = username
+            else:
+                import uuid
+                validated_data['username'] = f"farmer_{uuid.uuid4().hex[:8]}"
+        
+        # Create farmer user
+        user = User.objects.create_user(
+            **validated_data,
+            role=farmer_role,
+            created_by=None  # Self-registered, no creator
+        )
+        user.set_password(password)
+        user.save()
+        
+        return user

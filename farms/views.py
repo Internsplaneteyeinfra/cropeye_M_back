@@ -222,11 +222,24 @@ class FarmViewSet(viewsets.ModelViewSet):
         user = self.request.user
         data = self.request.data
 
+        # If farmer is creating farm, auto-assign to themselves
+        if user.has_role('farmer'):
+            if not data.get('farm_owner'):
+                # Auto-assign to the farmer creating the farm
+                serializer.save(farm_owner=user, created_by=user, industry=user.industry)
+            else:
+                # Validate that farmer can only assign to themselves
+                farm_owner_id = data.get('farm_owner')
+                if isinstance(farm_owner_id, dict):
+                    farm_owner_id = farm_owner_id.get('id')
+                if str(farm_owner_id) != str(user.id):
+                    raise ValidationError("Farmers can only create farms for themselves.")
+                serializer.save(farm_owner=user, created_by=user, industry=user.industry)
         # field officer must assign farm_owner
-        if user.has_role('fieldofficer') and not data.get('farm_owner'):
+        elif user.has_role('fieldofficer') and not data.get('farm_owner'):
             raise ValidationError("Field Officer must assign a farm_owner.")
-
-        # Assign industry from user
+        else:
+            # Assign industry from user
         user_industry = get_user_industry(user)
         serializer.save(created_by=user, industry=user_industry)
 
@@ -403,6 +416,10 @@ class FarmViewSet(viewsets.ModelViewSet):
         Complete farmer registration endpoint - creates farmer, plot, farm, and irrigation in one call
         Supports both single plot and multiple plots registration.
         
+        ACCESS: 
+        - Field officers can register any farmer
+        - Farmers can register themselves (if not authenticated or authenticated as farmer)
+        
         Expected JSON structure (multiple plots):
         {
             "farmer": {
@@ -490,20 +507,36 @@ class FarmViewSet(viewsets.ModelViewSet):
         """
         user = request.user
 
-        # Check if user is field officer
-        if not user.has_role('fieldofficer'):
-            return Response(
-                {'error': 'Only field officers can register farmers'},
-                status=403
-            )
+        # Allow field officers OR farmers (self-registration) OR unauthenticated users (new farmer registration)
+        if user.is_authenticated:
+            if not (user.has_role('fieldofficer') or user.has_role('farmer')):
+                return Response(
+                    {'error': 'Only field officers or farmers can use this endpoint'},
+                    status=403
+                )
+        # Unauthenticated users are allowed (new farmer self-registration)
 
         try:
             from .farmer_registration_service import CompleteFarmerRegistrationService
 
+            # Determine if this is self-registration or field officer registration
+            farmer_data = request.data.get('farmer', {})
+            
+            # If user is authenticated as a farmer and wants to add plots/farms
+            if user.is_authenticated and user.has_role('farmer'):
+                # Farmer is adding plots/farms to their existing account
+                farmer = user
+                field_officer = None
+            else:
+                # New farmer registration (either by field officer or self-registration)
+                farmer = None
+                field_officer = user if (user.is_authenticated and user.has_role('fieldofficer')) else None
+            
             # Perform complete registration
             result = CompleteFarmerRegistrationService.register_complete_farmer(
                 request.data,
-                user
+                field_officer=field_officer,
+                farmer=farmer
             )
 
             # Get detailed summary for all created entities
@@ -558,19 +591,24 @@ class FarmViewSet(viewsets.ModelViewSet):
         """
         user = request.user
 
-        # Check if user is field officer
-        if not user.has_role('fieldofficer'):
-            return Response(
-                {'error': 'Only field officers can register farmers'},
-                status=403
-            )
+        # Allow field officers OR unauthenticated users (self-registration) OR farmers (self-update)
+        if user.is_authenticated:
+            if not (user.has_role('fieldofficer') or user.has_role('farmer')):
+                return Response(
+                    {'error': 'Only field officers or farmers can use this endpoint'},
+                    status=403
+                )
+        # Unauthenticated users are allowed (new farmer self-registration)
 
         try:
             from .farmer_registration_service import CompleteFarmerRegistrationService
 
             # Create farmer only
             farmer_data = request.data
-            farmer = CompleteFarmerRegistrationService._create_farmer(farmer_data)
+            
+            # Determine if this is self-registration or field officer registration
+            field_officer = user if (user.is_authenticated and user.has_role('fieldofficer')) else None
+            farmer = CompleteFarmerRegistrationService._create_farmer(farmer_data, field_officer)
 
             from users.serializers import UserSerializer
 
@@ -1104,8 +1142,16 @@ class PlotViewSet(viewsets.ModelViewSet):
         user = self.request.user
         # Get user's industry
         user_industry = get_user_industry(user)
-        # Set created_by for field officers or admin
-        if user.has_any_role(['fieldofficer', 'admin', 'manager']):
+        
+        # If farmer is creating plot, auto-assign to themselves
+        if user.has_role('farmer'):
+            serializer.save(
+                farmer=user,
+                created_by=user,
+                industry=user_industry
+            )
+        # Field officers or admin can assign to any farmer
+        elif user.has_any_role(['fieldofficer', 'admin', 'manager']):
             serializer.save(created_by=user, industry=user_industry)
         else:
             serializer.save(industry=user_industry)

@@ -15,12 +15,116 @@ from .serializers import (
     FieldOfficerWithFarmersSerializer,
     FieldOfficerSerializer,
     OwnerHierarchySerializer,
-    ManagerHierarchySerializer
+    ManagerHierarchySerializer,
+    SimpleUserSerializer,
 )
 from .permissions import IsManager, IsOwner
 from .multi_tenant_utils import filter_by_industry, get_accessible_users, get_user_industry
 
 User = get_user_model()
+
+
+class SimpleUserViewSet(viewsets.ModelViewSet):
+    """
+    Farmer CRUD API
+    GET     /api/simple-users/
+    POST    /api/simple-users/          # Farmer self-registration
+    GET     /api/simple-users/{id}/
+    PUT     /api/simple-users/{id}/     # Update own profile (if authenticated as that farmer)
+    PATCH   /api/simple-users/{id}/
+    DELETE  /api/simple-users/{id}/     # Not allowed for self-deletion
+    """
+    serializer_class = SimpleUserSerializer
+    permission_classes = [permissions.AllowAny]  # Allow registration without authentication
+
+    def get_permissions(self):
+        """
+        Allow anyone to create (register), but require authentication for other operations
+        """
+        if self.action == 'create':
+            return [permissions.AllowAny()]  # Anyone can register as farmer
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]  # Must be authenticated to update/delete
+        else:
+            return [permissions.IsAuthenticated()]  # Must be authenticated to view
+
+    def get_queryset(self):
+        """
+        Return queryset based on user role:
+        - Farmers: Can only see their own profile
+        - Field officers/managers/owners: Can see all farmers in their industry
+        - Superusers: Can see all farmers
+        """
+        user = self.request.user
+        
+        # If not authenticated, return empty queryset (can't view)
+        if not user.is_authenticated:
+            return User.objects.none()
+        
+        # Superuser can see all farmers
+        if user.is_superuser:
+            return User.objects.filter(role__name='farmer')
+        
+        # Farmers can only see their own profile
+        if user.has_role('farmer'):
+            return User.objects.filter(id=user.id, role__name='farmer')
+        
+        # Field officers, managers, owners can see farmers in their industry
+        if user.industry:
+            return User.objects.filter(role__name='farmer', industry=user.industry)
+        
+        return User.objects.none()
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+    
+    def perform_create(self, serializer):
+        """
+        Create farmer account - automatically assigned farmer role
+        """
+        serializer.save()
+    
+    def perform_update(self, serializer):
+        """
+        Update farmer profile - only allow updating own profile
+        """
+        user = self.request.user
+        instance = serializer.instance
+        
+        # Farmers can only update their own profile
+        if user.has_role('farmer') and user.id != instance.id:
+            raise permissions.PermissionDenied("You can only update your own profile.")
+        
+        # Other roles (field officers, managers) can update farmers in their industry
+        if not user.is_superuser:
+            if user.industry and instance.industry != user.industry:
+                raise permissions.PermissionDenied("You can only update farmers in your industry.")
+        
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        """
+        Delete farmer - prevent self-deletion, allow managers/field officers to delete
+        """
+        user = self.request.user
+        
+        # Prevent farmers from deleting their own account
+        if user.has_role('farmer') and user.id == instance.id:
+            raise permissions.PermissionDenied("You cannot delete your own account. Please contact administrator.")
+        
+        # Only allow deletion by field officers, managers, owners, or superusers
+        if not user.is_superuser:
+            if not (user.has_role('fieldofficer') or user.has_role('manager') or user.has_role('owner')):
+                raise permissions.PermissionDenied("You do not have permission to delete farmer accounts.")
+            
+            # Check industry match
+            if user.industry and instance.industry != user.industry:
+                raise permissions.PermissionDenied("You can only delete farmers in your industry.")
+        
+        instance.delete()
+
 
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()

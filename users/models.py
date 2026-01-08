@@ -79,19 +79,19 @@ class User(AbstractUser):
 
     # Hardcoded dropdowns
     STATE_CHOICES = [
-        ('Maharashtra','Maharashtra'),
-        ('Gujarat','Gujarat'),
-        ('Rajasthan','Rajasthan')
+        ('Maharashtra', 'Maharashtra'),
+        ('Karnataka', 'Karnataka'),
+        ('Tamil Nadu', 'Tamil Nadu'),
     ]
     DISTRICT_CHOICES = [
-        ('Pune','Pune'),
-        ('Mumbai','Mumbai'),
-        ('Ahmedabad','Ahmedabad')
+        ('Pune', 'Pune'),
+        ('Mumbai', 'Mumbai'),
+        ('Bangalore', 'Bangalore'),
     ]
     TALUKA_CHOICES = [
-        ('Haveli','Haveli'),
-        ('Andheri','Andheri'),
-        ('Maninagar','Maninagar')
+        ('Haveli', 'Haveli'),
+        ('Andheri', 'Andheri'),
+        ('Whitefield', 'Whitefield'),
     ]
     state = models.CharField(max_length=50, choices=STATE_CHOICES, blank=True)
     district = models.CharField(max_length=50, choices=DISTRICT_CHOICES, blank=True)

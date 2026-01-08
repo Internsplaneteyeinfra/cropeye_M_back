@@ -41,8 +41,13 @@ class CompleteFarmerRegistrationService:
             if 'plots' in data:
                 logger.info(f"Multiple plots format - {len(data.get('plots', []))} plots")
             
-            # Step 1: Create Farmer (User)
-            farmer = CompleteFarmerRegistrationService._create_farmer(data.get('farmer', {}), field_officer)
+            # Step 1: Create Farmer (User) or use existing farmer
+            if farmer:
+                # Using existing farmer (self-registration for adding plots)
+                logger.info(f"Using existing farmer: {farmer.username} (ID: {farmer.id})")
+            else:
+                # Create new farmer
+                farmer = CompleteFarmerRegistrationService._create_farmer(data.get('farmer', {}), field_officer)
 
             # Handle multiple plots, farms, and irrigations
             created_entities = []
@@ -66,7 +71,7 @@ class CompleteFarmerRegistrationService:
                     logger.info(f"Processing plot {idx+1} - plot_data keys: {list(plot_data_to_create.keys())}")
                     logger.info(f"Boundary in entity_data['plot']: {'boundary' in plot_data_to_create}, value type: {type(plot_data_to_create.get('boundary'))}, value: {plot_data_to_create.get('boundary')}")
                     plot = CompleteFarmerRegistrationService._create_plot(
-                        plot_data_to_create, farmer, field_officer
+                        plot_data_to_create, farmer, field_officer if field_officer else farmer
                     )
 
                 farm = None
@@ -118,7 +123,7 @@ class CompleteFarmerRegistrationService:
                         farm_data['spacing_b'] = data['farm']['spacing_b']
                     
                     farm = CompleteFarmerRegistrationService._create_farm(
-                        farm_data, farmer, field_officer, plot
+                        farm_data, farmer, field_officer if field_officer else farmer, plot
                     )
 
                 irrigation = None
@@ -227,7 +232,7 @@ class CompleteFarmerRegistrationService:
         return farmer
     
     @staticmethod
-    def _create_plot(plot_data, farmer, field_officer):
+    def _create_plot(plot_data, farmer, field_officer=None):
         """Create plot and assign to farmer"""
         if not plot_data:
             return None
@@ -255,8 +260,16 @@ class CompleteFarmerRegistrationService:
                 f"Plot GAT {plot_data['gat_number']} in {plot_data['village']} already exists"
             )
         
-        # Get industry from field officer
-        industry = get_user_industry(field_officer) if field_officer else None
+        # Get industry from field officer or farmer (for self-registration)
+        if field_officer:
+            industry = get_user_industry(field_officer)
+            created_by = field_officer
+        elif farmer:
+            industry = get_user_industry(farmer)
+            created_by = farmer
+        else:
+            industry = None
+            created_by = None
         
         # Create plot (skip FastAPI sync during unified registration)
         plot = Plot(
@@ -269,8 +282,8 @@ class CompleteFarmerRegistrationService:
             country=plot_data.get('country', 'India'),
             pin_code=plot_data.get('pin_code', ''),
             farmer=farmer,  # Auto-assign to farmer
-            created_by=field_officer,
-            industry=industry  # Assign industry from field officer
+            created_by=created_by,  # Field officer or farmer (self-registration)
+            industry=industry  # Assign industry from field officer or farmer
         )
         
         # Skip FastAPI sync during unified registration
@@ -329,7 +342,7 @@ class CompleteFarmerRegistrationService:
         return plot
     
     @staticmethod
-    def _create_farm(farm_data, farmer, field_officer, plot=None):
+    def _create_farm(farm_data, farmer, field_officer=None, plot=None):
         """Create farm and assign to farmer"""
         if not farm_data:
             return None
@@ -489,15 +502,20 @@ class CompleteFarmerRegistrationService:
             
             logger.info(f"Final normalized values - crop_category: '{crop_category}', plantation_type: '{plantation_type_str}', planting_method: '{planting_method_str}'")
             
-            # Get industry from field officer
-            industry = get_user_industry(field_officer) if field_officer else None
+            # Get industry from field officer or farmer (for self-registration) - needed for crop type creation
+            if field_officer:
+                crop_type_industry = get_user_industry(field_officer)
+            elif farmer:
+                crop_type_industry = get_user_industry(farmer)
+            else:
+                crop_type_industry = None
             
             # Use get_or_create with crop_category and plantation data
             crop_type, created = CropType.objects.get_or_create(
                 crop_category=crop_category,
                 plantation_type=plantation_type_str if plantation_type_str else '',
                 planting_method=planting_method_str if planting_method_str else '',
-                industry=industry,
+                industry=crop_type_industry,
                 defaults={}
             )
             
@@ -508,15 +526,15 @@ class CompleteFarmerRegistrationService:
                     crop_type.plantation_type = plantation_type_str if plantation_type_str else ''
                     crop_type.planting_method = planting_method_str if planting_method_str else ''
                     needs_update = True
-                if crop_type.industry != industry:
-                    crop_type.industry = industry
+                if crop_type.industry != crop_type_industry:
+                    crop_type.industry = crop_type_industry
                     needs_update = True
                 if needs_update:
                     crop_type.save()
                     logger.info(f"Updated CropType crop_category='{crop_category}' with plantation data and industry")
             
             if created:
-                logger.info(f"Created CropType crop_category='{crop_category}' with plantation_type={plantation_type_str}, planting_method={planting_method_str}, industry={industry}")
+                logger.info(f"Created CropType crop_category='{crop_category}' with plantation_type={plantation_type_str}, planting_method={planting_method_str}, industry={crop_type_industry}")
         
         # Parse plantation_date if provided
         plantation_date = None
@@ -589,8 +607,13 @@ class CompleteFarmerRegistrationService:
         fruit_pruning_date = parse_date_field(farm_data.get('fruit_pruning_date'), 'fruit_pruning_date')
         last_harvesting_date = parse_date_field(farm_data.get('last_harvesting_date'), 'last_harvesting_date')
         
-        # Get industry from field officer
-        industry = get_user_industry(field_officer) if field_officer else None
+        # Get industry from field officer or farmer (for self-registration)
+        if field_officer:
+            industry = get_user_industry(field_officer)
+        elif farmer:
+            industry = get_user_industry(farmer)
+        else:
+            industry = None
         
         # Determine crop category to decide which fields to save
         crop_category = None
@@ -604,7 +627,7 @@ class CompleteFarmerRegistrationService:
             address=farm_data['address'],
             area_size=farm_data['area_size'],
             farm_owner=farmer,  # Auto-assign to farmer
-            created_by=field_officer,
+            created_by=field_officer if field_officer else farmer,  # Field officer or farmer (self-registration)
             plot=plot,
             soil_type=soil_type,
             crop_type=crop_type,
@@ -612,7 +635,7 @@ class CompleteFarmerRegistrationService:
             spacing_a=farm_data.get('spacing_a'),
             spacing_b=farm_data.get('spacing_b'),
             crop_variety=crop_variety,
-            industry=industry,  # Assign industry from field officer
+            industry=industry,  # Assign industry from field officer or farmer
             # Grapes-specific fields
             variety_type=farm_data.get('variety_type'),
             variety_subtype=farm_data.get('variety_subtype'),
@@ -636,7 +659,7 @@ class CompleteFarmerRegistrationService:
         return farm
     
     @staticmethod
-    def _create_farm_irrigation(irrigation_data, farm, field_officer, farm_data=None):
+    def _create_farm_irrigation(irrigation_data, farm, field_officer=None, farm_data=None):
         """Create farm irrigation system"""
         if not irrigation_data:
             return None

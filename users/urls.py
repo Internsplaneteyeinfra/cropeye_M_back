@@ -1,12 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import UserViewSet
+from .views import UserViewSet, SimpleUserViewSet
 from .login_view import LoginView, PasswordResetRequestView, PasswordResetConfirmView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from .serializers import CustomTokenObtainPairSerializer
 
 router = DefaultRouter()
 router.register(r'users', UserViewSet)
+router.register(r'simple-users', SimpleUserViewSet, basename='simple-users')
 
 class CustomTokenObtainPairView(TokenObtainPairView):
     """
@@ -16,6 +17,8 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 urlpatterns = [
     path('', include(router.urls)),
+
+    # auth
     path('login/', LoginView.as_view(), name='login'),
     path('password-reset-request/', PasswordResetRequestView.as_view(), name='password_reset_request'),
     path('password-reset-confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
