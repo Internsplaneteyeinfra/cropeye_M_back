@@ -240,8 +240,8 @@ class FarmViewSet(viewsets.ModelViewSet):
             raise ValidationError("Field Officer must assign a farm_owner.")
         else:
             # Assign industry from user
-        user_industry = get_user_industry(user)
-        serializer.save(created_by=user, industry=user_industry)
+           user_industry = get_user_industry(user)
+           serializer.save(created_by=user, industry=user_industry)
 
     def perform_update(self, serializer):
         user = self.request.user
