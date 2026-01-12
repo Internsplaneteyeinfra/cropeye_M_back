@@ -172,12 +172,13 @@ class MultiTenantPermission(permissions.BasePermission):
                 return obj.farmer in accessible_users
         
         if user.has_role('farmer'):
-            # Farmer can only access their own objects
+    # Farmer can ONLY access their own objects
             if hasattr(obj, 'farm_owner'):
                 return obj.farm_owner == user
-            elif hasattr(obj, 'farmer'):
+            if hasattr(obj, 'farmer'):
                 return obj.farmer == user
-            elif hasattr(obj, 'created_by'):
+            if hasattr(obj, 'created_by'):
                 return obj.created_by == user
-        
-        return True
+
+    #  Farmer cannot access anything else
+            return False
