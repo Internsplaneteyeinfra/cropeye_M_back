@@ -13,6 +13,7 @@ from .views import (
     FarmImageViewSet,
     FarmSensorViewSet,
     FarmIrrigationViewSet,
+    IrrigationTypeViewSet,
     get_crop_fields_config,
     get_crop_type_choices,
 )
@@ -22,6 +23,7 @@ router.register('soil-types',       SoilTypeViewSet,        basename='soiltype')
 router.register('crop-types',       CropTypeViewSet,        basename='croptype')
 router.register('plantation-types', PlantationTypeViewSet,  basename='plantationtype')
 router.register('planting-methods', PlantingMethodViewSet,  basename='plantingmethod')
+router.register('irrigation-types', IrrigationTypeViewSet,  basename='irrigationtype')
 router.register('farms',            FarmViewSet,            basename='farm')
 router.register('plots',            PlotViewSet,            basename='plot')
 router.register('farm-images',      FarmImageViewSet,       basename='farmimage')

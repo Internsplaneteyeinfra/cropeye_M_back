@@ -172,13 +172,9 @@ class MultiTenantPermission(permissions.BasePermission):
                 return obj.farmer in accessible_users
         
         if user.has_role('farmer'):
-    # Farmer can ONLY access their own objects
-            if hasattr(obj, 'farm_owner'):
-                return obj.farm_owner == user
-            if hasattr(obj, 'farmer'):
-                return obj.farmer == user
-            if hasattr(obj, 'created_by'):
-                return obj.created_by == user
-
-    #  Farmer cannot access anything else
-            return False
+            # Farmers can access all objects in their industry (updated to allow access to all endpoints)
+            # Check if object belongs to user's industry
+            if hasattr(obj, 'industry'):
+                return obj.industry == user_industry
+            # For objects without industry field, allow access
+            return True

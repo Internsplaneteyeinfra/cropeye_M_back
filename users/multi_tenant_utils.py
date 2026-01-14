@@ -137,21 +137,14 @@ def filter_by_industry(queryset, user):
         else:
             return queryset.filter(created_by=user)
     
-    # Farmer - can see only their own data
+    # Farmer - can see all data in their industry (updated to allow access to all endpoints)
     if user.has_role('farmer'):
         if hasattr(queryset.model, 'industry'):
-            if hasattr(queryset.model, 'farmer'):
-                # Plot model
-                return queryset.filter(industry=user_industry, farmer=user)
-            elif hasattr(queryset.model, 'farm_owner'):
-                # Farm model
-                return queryset.filter(industry=user_industry, farm_owner=user)
-            elif hasattr(queryset.model, 'created_by'):
-                return queryset.filter(industry=user_industry, created_by=user)
-            else:
-                return queryset.filter(industry=user_industry)
+            # Farmers can see all data in their industry
+            return queryset.filter(industry=user_industry)
         else:
-            return queryset.filter(created_by=user)
+            # For models without industry field, show all (no filtering by created_by)
+            return queryset.all()
     
     # Default: filter by industry if model has it
     if hasattr(queryset.model, 'industry'):

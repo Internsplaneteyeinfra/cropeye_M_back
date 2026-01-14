@@ -19,6 +19,7 @@ from .models import (
     FarmImage,
     FarmSensor,
     FarmIrrigation,
+    IrrigationType,
 )
 from .serializers import (
     SoilTypeSerializer,
@@ -34,12 +35,18 @@ from .serializers import (
     FarmImageSerializer,
     FarmSensorSerializer,
     FarmIrrigationSerializer,
+    IrrigationTypeSerializer,
 )
 
 
 class IsOwnerOrAdminOrManager(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
+        
+        # Allow farmers to read all objects
+        if request.method in permissions.SAFE_METHODS and user.has_role('farmer'):
+            return True
+        
         # Farm object
         if isinstance(obj, Farm):
             return (
@@ -68,6 +75,7 @@ class SoilTypeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # Allow farmers to read all soil types
         return [permissions.IsAuthenticated()]
 
 
@@ -79,6 +87,7 @@ class PlantationTypeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # Allow farmers to read all plantation types
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -109,6 +118,7 @@ class PlantingMethodViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # Allow farmers to read all planting methods
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -141,12 +151,13 @@ class CropTypeViewSet(viewsets.ModelViewSet):
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # Allow farmers to read all crop types
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
-        # Apply multi-tenant filtering
+        # Apply multi-tenant filtering (farmers can see all crop types in their industry)
         qs = filter_by_industry(qs, user)
         return qs
 
@@ -185,12 +196,13 @@ class FarmViewSet(viewsets.ModelViewSet):
         # Apply multi-tenant filtering
         qs = filter_by_industry(qs, user)
 
+        # Farmers can see all farms (not just their own) - removed farmer-specific filtering
         # filter by owner id
         if owner_id := self.request.query_params.get('owner'):
             if owner_id.isdigit():
                 qs = qs.filter(farm_owner_id=owner_id)
 
-        # only my farms
+        # only my farms (optional filter, farmers can still use this to filter to their own)
         if self.request.query_params.get('my_farms') == 'true':
             qs = qs.filter(farm_owner=user)
 
@@ -1126,6 +1138,7 @@ class PlotViewSet(viewsets.ModelViewSet):
         # Apply multi-tenant filtering
         qs = filter_by_industry(qs, user)
 
+        # Farmers can see all plots (not just their own) - removed farmer-specific filtering
         if self.request.query_params.get('my_farms') == 'true':
             qs = qs.filter(farms__farm_owner=user)
 
@@ -1285,7 +1298,9 @@ class FarmImageViewSet(viewsets.ModelViewSet):
         if ed := self.request.query_params.get('end_date'):
             qs = qs.filter(uploaded_at__date__lte=ed)
 
-        if user.has_role('fieldofficer'):
+        # Farmers can see all farm images (not just their own) - removed farmer-specific filtering
+        # Field officers can still filter to their created farms
+        if user.has_role('fieldofficer') and not user.has_role('farmer'):
             qs = qs.filter(farm__created_by=user)
 
         return qs
@@ -1315,7 +1330,9 @@ class FarmSensorViewSet(viewsets.ModelViewSet):
         if st := self.request.query_params.get('status'):
             qs = qs.filter(status=(st.lower() == 'true'))
 
-        if user.has_role('fieldofficer'):
+        # Farmers can see all sensors (not just their own) - removed farmer-specific filtering
+        # Field officers can still filter to their created farms
+        if user.has_role('fieldofficer') and not user.has_role('farmer'):
             qs = qs.filter(farm__created_by=user)
 
         return qs
@@ -1347,7 +1364,9 @@ class FarmIrrigationViewSet(viewsets.ModelViewSet):
         if st := self.request.query_params.get('status'):
             qs = qs.filter(status=(st.lower() == 'true'))
 
-        if user.has_role('fieldofficer'):
+        # Farmers can see all irrigations (not just their own) - removed farmer-specific filtering
+        # Field officers can still filter to their created farms
+        if user.has_role('fieldofficer') and not user.has_role('farmer'):
             qs = qs.filter(farm__created_by=user)
 
         return qs
@@ -1376,6 +1395,18 @@ class FarmIrrigationViewSet(viewsets.ModelViewSet):
             }
 
         return Response(result)
+
+
+class IrrigationTypeViewSet(viewsets.ModelViewSet):
+    queryset = IrrigationType.objects.all()
+    serializer_class = IrrigationTypeSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
+        # Allow farmers to read all irrigation types
+        return [permissions.IsAuthenticated()]
 
 
 @api_view(['GET'])

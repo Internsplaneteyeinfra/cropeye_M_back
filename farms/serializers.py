@@ -32,6 +32,14 @@ class SoilTypeSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'description', 'properties']
 
 
+class IrrigationTypeSerializer(serializers.ModelSerializer):
+    name_display = serializers.CharField(source='get_name_display', read_only=True)
+    
+    class Meta:
+        model = IrrigationType
+        fields = ['id', 'name', 'name_display', 'description']
+
+
 class PlantationTypeSerializer(serializers.ModelSerializer):
     industry_name = serializers.CharField(source='industry.name', read_only=True)
     crop_type_id = serializers.PrimaryKeyRelatedField(
