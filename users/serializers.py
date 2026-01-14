@@ -410,7 +410,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'username', 'email', 'password', 'first_name', 'last_name',
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'phone_number', 'address', 'village', 'taluka', 'district', 'state','profile_picture',
             'role_id', 'industry'
         ]
     

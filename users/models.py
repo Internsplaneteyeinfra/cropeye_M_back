@@ -76,6 +76,13 @@ class User(AbstractUser):
         help_text="Phone number (10 digits for India)"
     )
     address = models.TextField(blank=True)
+    profile_picture = models.ImageField(
+    upload_to='profile_pics/',
+    null=True,
+    blank=True,
+    help_text="Optional user profile picture"
+)
+
 
     # Hardcoded dropdowns
     STATE_CHOICES = [
@@ -96,6 +103,7 @@ class User(AbstractUser):
     state = models.CharField(max_length=50, choices=STATE_CHOICES, blank=True)
     district = models.CharField(max_length=50, choices=DISTRICT_CHOICES, blank=True)
     taluka = models.CharField(max_length=50, choices=TALUKA_CHOICES, blank=True)
+    village = models.CharField(max_length=255, blank=True, null=True, help_text="Optional: user's village")
 
     # ==================== Password Reset Fields ====================
     password_reset_token = models.CharField(max_length=100, null=True, blank=True)
