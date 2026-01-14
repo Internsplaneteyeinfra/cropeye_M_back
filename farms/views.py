@@ -43,8 +43,8 @@ class IsOwnerOrAdminOrManager(permissions.BasePermission):
     def has_object_permission(self, request, view, obj):
         user = request.user
         
-        # Allow farmers to read all objects
-        if request.method in permissions.SAFE_METHODS and user.has_role('farmer'):
+        # Allow farmers to perform all operations (read, create, update, delete) on all objects
+        if user.has_role('farmer'):
             return True
         
         # Farm object
@@ -73,9 +73,7 @@ class SoilTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
-        # Allow farmers to read all soil types
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
 
@@ -85,9 +83,7 @@ class PlantationTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
-        # Allow farmers to read all plantation types
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -116,9 +112,7 @@ class PlantingMethodViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
-        # Allow farmers to read all planting methods
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -149,9 +143,7 @@ class CropTypeViewSet(viewsets.ModelViewSet):
     search_fields = ['crop_type']
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
-        # Allow farmers to read all crop types
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -185,8 +177,7 @@ class FarmViewSet(viewsets.ModelViewSet):
         return FarmSerializer
 
     def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsOwnerOrAdminOrManager()]
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -1122,7 +1113,7 @@ class FarmViewSet(viewsets.ModelViewSet):
 class PlotViewSet(viewsets.ModelViewSet):
     queryset = Plot.objects.all()
     serializer_class = PlotSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdminOrManager]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['gat_number', 'plot_number', 'village', 'taluka', 'state']
     search_fields = ['gat_number', 'plot_number', 'village', 'district']
 
@@ -1278,7 +1269,7 @@ class PlotViewSet(viewsets.ModelViewSet):
 class FarmImageViewSet(viewsets.ModelViewSet):
     queryset = FarmImage.objects.all()
     serializer_class = FarmImageSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdminOrManager]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['farm']
 
     def get_queryset(self):
@@ -1309,7 +1300,7 @@ class FarmImageViewSet(viewsets.ModelViewSet):
 class FarmSensorViewSet(viewsets.ModelViewSet):
     queryset = FarmSensor.objects.all()
     serializer_class = FarmSensorSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdminOrManager]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['farm', 'sensor_type', 'status']
     search_fields = ['name']
 
@@ -1341,7 +1332,7 @@ class FarmSensorViewSet(viewsets.ModelViewSet):
 class FarmIrrigationViewSet(viewsets.ModelViewSet):
     queryset = FarmIrrigation.objects.select_related('farm', 'irrigation_type').all()
     serializer_class = FarmIrrigationSerializer
-    permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdminOrManager]
+    permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['farm', 'irrigation_type', 'status']
     search_fields = ['irrigation_type__name']
     ordering_fields = ['status']
@@ -1403,9 +1394,7 @@ class IrrigationTypeViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
 
     def get_permissions(self):
-        if self.action in ['create', 'update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), permissions.IsAdminUser()]
-        # Allow farmers to read all irrigation types
+        # Allow farmers to perform all operations (create, read, update, delete)
         return [permissions.IsAuthenticated()]
 
 

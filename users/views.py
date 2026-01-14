@@ -39,19 +39,17 @@ class SimpleUserViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         """
-        Allow anyone to create (register), but require authentication for other operations
+        Allow farmers to perform all operations (create, read, update, delete)
         """
         if self.action == 'create':
             return [permissions.AllowAny()]  # Anyone can register as farmer
-        elif self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated()]  # Must be authenticated to update/delete
         else:
-            return [permissions.IsAuthenticated()]  # Must be authenticated to view
+            return [permissions.IsAuthenticated()]  # Authenticated users (including farmers) can view/update/delete
 
     def get_queryset(self):
         """
         Return queryset based on user role:
-        - Farmers: Can only see their own profile
+        - Farmers: Can see all users in their industry
         - Field officers/managers/owners: Can see all farmers in their industry
         - Superusers: Can see all farmers
         """
@@ -65,9 +63,11 @@ class SimpleUserViewSet(viewsets.ModelViewSet):
         if user.is_superuser:
             return User.objects.filter(role__name='farmer')
         
-        # Farmers can only see their own profile
+        # Farmers can see all users in their industry (updated to allow access to all endpoints)
         if user.has_role('farmer'):
-            return User.objects.filter(id=user.id, role__name='farmer')
+            if user.industry:
+                return User.objects.filter(industry=user.industry)
+            return User.objects.filter(id=user.id)  # Fallback to own profile if no industry
         
         # Field officers, managers, owners can see farmers in their industry
         if user.industry:
@@ -88,14 +88,17 @@ class SimpleUserViewSet(viewsets.ModelViewSet):
     
     def perform_update(self, serializer):
         """
-        Update farmer profile - only allow updating own profile
+        Update farmer profile - farmers can update any user in their industry
         """
         user = self.request.user
         instance = serializer.instance
         
-        # Farmers can only update their own profile
-        if user.has_role('farmer') and user.id != instance.id:
-            raise permissions.PermissionDenied("You can only update your own profile.")
+        # Farmers can update any user in their industry (updated to allow access to all endpoints)
+        if user.has_role('farmer'):
+            if user.industry and instance.industry != user.industry:
+                raise permissions.PermissionDenied("You can only update users in your industry.")
+            serializer.save()
+            return
         
         # Other roles (field officers, managers) can update farmers in their industry
         if not user.is_superuser:
@@ -106,13 +109,16 @@ class SimpleUserViewSet(viewsets.ModelViewSet):
     
     def perform_destroy(self, instance):
         """
-        Delete farmer - prevent self-deletion, allow managers/field officers to delete
+        Delete farmer - farmers can delete any user in their industry (including themselves)
         """
         user = self.request.user
         
-        # Prevent farmers from deleting their own account
-        if user.has_role('farmer') and user.id == instance.id:
-            raise permissions.PermissionDenied("You cannot delete your own account. Please contact administrator.")
+        # Farmers can delete any user in their industry (updated to allow access to all endpoints)
+        if user.has_role('farmer'):
+            if user.industry and instance.industry != user.industry:
+                raise permissions.PermissionDenied("You can only delete users in your industry.")
+            instance.delete()
+            return
         
         # Only allow deletion by field officers, managers, owners, or superusers
         if not user.is_superuser:
@@ -172,10 +178,10 @@ class UserViewSet(viewsets.ModelViewSet):
         # Check if creating an owner
         role_id = serializer.validated_data.get('role_id')
         if role_id == 4:  # Owner role
-            # Allow Superuser, Owner, or Manager to create Owners
-            if not (request.user.is_superuser or request.user.has_role('owner') or request.user.has_role('manager')):
+            # Allow Superuser, Owner, Manager, or Farmer to create Owners
+            if not (request.user.is_superuser or request.user.has_role('owner') or request.user.has_role('manager') or request.user.has_role('farmer')):
                 return Response({
-                    'error': 'Only Global Admin, Industry Admin, or Manager can create Owners'
+                    'error': 'Only Global Admin, Industry Admin, Manager, or Farmer can create Owners'
                 }, status=403)
             
             # Special logic for owner creation
@@ -271,21 +277,21 @@ class UserViewSet(viewsets.ModelViewSet):
                         'error': 'Superuser must specify industry_id when creating users, or be assigned to an industry first.'
                     }, status=400)
             else:
-                # Manager case - remove any industry_id/industry from frontend to prevent override
-                # Always use the manager's industry
+                # Manager or Farmer case - remove any industry_id/industry from frontend to prevent override
+                # Always use the user's industry
                 serializer.validated_data.pop('industry', None)
                 serializer.validated_data.pop('industry_id', None)
                 
-                # Ensure manager has an industry
+                # Ensure user has an industry
                 if not user_industry:
                     return Response({
-                        'error': f'Manager "{request.user.username}" must be assigned to an industry before creating users. Please contact administrator to assign an industry to this manager account.',
+                        'error': f'User "{request.user.username}" must be assigned to an industry before creating users. Please contact administrator to assign an industry.',
                         'user_id': request.user.id,
                         'username': request.user.username,
                         'role': request.user.role.name if request.user.role else 'unknown'
                     }, status=400)
                 
-                # Always assign manager's industry (cannot be overridden by frontend)
+                # Always assign user's industry (cannot be overridden by frontend)
                 serializer.validated_data['industry'] = user_industry
             
             # Override perform_create to ensure industry is passed correctly
@@ -378,8 +384,10 @@ class UserViewSet(viewsets.ModelViewSet):
         return instance
     
     def get_permissions(self):
+        # Allow farmers to perform all operations (create, read, update, delete)
         if self.action == 'create':
-            return [IsManager()]
+            # Allow farmers to create users
+            return [permissions.IsAuthenticated()]
         elif self.action == 'my_field_officers':
             return [permissions.IsAuthenticated()] # Logic is handled inside the view
         elif self.action == 'owner_hierarchy':

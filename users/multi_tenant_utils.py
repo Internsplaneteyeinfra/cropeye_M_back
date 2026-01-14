@@ -197,9 +197,9 @@ def get_accessible_users(user):
             industry=user_industry
         )
     
-    # Farmer - sees only themselves
+    # Farmer - sees all users in their industry (updated to allow access to all endpoints)
     if user.has_role('farmer'):
-        return User.objects.filter(id=user.id)
+        return User.objects.filter(industry=user_industry)
     
     return User.objects.none()
 
