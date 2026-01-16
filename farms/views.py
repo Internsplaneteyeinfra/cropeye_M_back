@@ -72,10 +72,21 @@ class SoilTypeViewSet(viewsets.ModelViewSet):
     serializer_class = SoilTypeSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_permissions(self):
-        # Allow farmers to perform all operations (create, read, update, delete)
-        return [permissions.IsAuthenticated()]
+    # Get all soil types
+    def get_queryset(self):
+        return SoilType.objects.all()
 
+    # Create a new soil type
+    def perform_create(self, serializer):
+        serializer.save()  # No created_by field
+
+    # Update an existing soil type
+    def perform_update(self, serializer):
+        serializer.save()  # No permission checks on user
+
+    # Delete a soil type
+    def perform_destroy(self, instance):
+        instance.delete()  # No permission checks on user
 
 class PlantationTypeViewSet(viewsets.ModelViewSet):
     queryset = PlantationType.objects.all()
@@ -1123,24 +1134,27 @@ class PlotViewSet(viewsets.ModelViewSet):
         return PlotSerializer
 
     def get_queryset(self):
-        qs = super().get_queryset()
         user = self.request.user
+        qs = Plot.objects.all().select_related('farmer', 'created_by', 'industry')
 
-        # Apply multi-tenant filtering
-        qs = filter_by_industry(qs, user)
+    # Apply multi-tenant filtering if the user has industry
+        if hasattr(user, 'industry') and user.industry:
+            qs = qs.filter(industry=user.industry)
 
-        # Farmers can see all plots (not just their own) - removed farmer-specific filtering
+    # Filter plots by user's farms if requested
         if self.request.query_params.get('my_farms') == 'true':
-            qs = qs.filter(farms__farm_owner=user)
+           qs = qs.filter(farms__farm_owner=user).distinct()
 
-        if farm_id := self.request.query_params.get('farm'):
-            if farm_id.isdigit():
-                qs = qs.filter(farms__id=farm_id)
+    # Filter by specific farm ID if provided
+        farm_id = self.request.query_params.get('farm')
+        if farm_id and farm_id.isdigit():
+           qs = qs.filter(farms__id=farm_id).distinct()
 
+    # Only plots with boundary if requested
         if self.request.query_params.get('has_boundary') == 'true':
-            qs = qs.filter(boundary__isnull=False)
+           qs = qs.filter(boundary__isnull=False)
 
-        return qs
+        return qs.distinct()
 
     def perform_create(self, serializer):
         user = self.request.user
@@ -1335,57 +1349,35 @@ class FarmIrrigationViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['farm', 'irrigation_type', 'status']
     search_fields = ['irrigation_type__name']
-    ordering_fields = ['status']
+    ordering_fields = ['status', 'id']
     ordering = ['-id']
 
     def get_queryset(self):
         qs = super().get_queryset()
         user = self.request.user
 
-        if farm_id := self.request.query_params.get('farm'):
-            if farm_id.isdigit():
-                qs = qs.filter(farm_id=farm_id)
+        # Filters
+        farm_id = self.request.query_params.get('farm')
+        if farm_id and farm_id.isdigit():
+            qs = qs.filter(farm_id=farm_id)
 
         if self.request.query_params.get('my_farms') == 'true':
             qs = qs.filter(farm__farm_owner=user)
 
-        if t := self.request.query_params.get('type'):
+        t = self.request.query_params.get('type')
+        if t:
             qs = qs.filter(irrigation_type__name=t)
 
-        if st := self.request.query_params.get('status'):
+        st = self.request.query_params.get('status')
+        if st:
             qs = qs.filter(status=(st.lower() == 'true'))
 
-        # Farmers can see all irrigations (not just their own) - removed farmer-specific filtering
-        # Field officers can still filter to their created farms
+        # Field officers see their own farms
         if user.has_role('fieldofficer') and not user.has_role('farmer'):
             qs = qs.filter(farm__created_by=user)
 
-        return qs
+        return qs.distinct()
 
-    def perform_create(self, serializer):
-        # FarmIrrigation model doesn't have created_by field
-        # The relationship is through farm.created_by
-        serializer.save()
-
-    def perform_update(self, serializer):
-        serializer.save()
-
-    @action(detail=False, methods=['get'])
-    def by_type(self, request):
-        """Get irrigation systems grouped by type"""
-        from .models import IrrigationType
-        irrigation_types = IrrigationType.objects.all()
-        result = {}
-
-        for irrigation_type in irrigation_types:
-            count = self.get_queryset().filter(irrigation_type=irrigation_type).count()
-            result[irrigation_type.name] = {
-                'display_name': irrigation_type.get_name_display(),
-                'count': count,
-                'description': irrigation_type.description
-            }
-
-        return Response(result)
 
 
 class IrrigationTypeViewSet(viewsets.ModelViewSet):

@@ -160,28 +160,18 @@ class CropTypeSerializer(serializers.ModelSerializer):
 
 
 class PlotSerializer(serializers.ModelSerializer):
-    # Replace read-only method fields with writeable GeometryFields
-    # GeometryField accepts GeoJSON format: {"type": "Point/Polygon", "coordinates": [...]}
     location = GeometryField(
-        required=False, 
-        allow_null=True,
-        help_text="Point geometry as GeoJSON: {\"type\": \"Point\", \"coordinates\": [longitude, latitude]}"
-    )
-    boundary = GeometryField(
-        required=False, 
-        allow_null=True,
-        help_text="Polygon geometry as GeoJSON: {\"type\": \"Polygon\", \"coordinates\": [[[lng, lat], [lng, lat], ...]]}"
-    )
-    
-    # Include farmer and created_by relationships
-    farmer = UserSerializer(read_only=True)
-    farmer_id = serializers.PrimaryKeyRelatedField(
-        source='farmer',
-        queryset=User.objects.all(),
-        write_only=True,
         required=False,
         allow_null=True,
+        help_text='Point geometry as GeoJSON: {"type": "Point", "coordinates": [longitude, latitude]}'
     )
+    boundary = GeometryField(
+        required=False,
+        allow_null=True,
+        help_text='Polygon geometry as GeoJSON: {"type": "Polygon", "coordinates": [[[lng, lat], ...]]}'
+    )
+
+    farmer = UserSerializer(read_only=True)
     created_by = UserSerializer(read_only=True)
 
     class Meta:
@@ -199,37 +189,36 @@ class PlotSerializer(serializers.ModelSerializer):
             'location',
             'boundary',
             'farmer',
-            'farmer_id',
             'created_by',
             'created_at',
             'updated_at',
         ]
         read_only_fields = ['farmer', 'created_by', 'created_at', 'updated_at']
-    
+
     def validate_boundary(self, value):
-        """Validate that boundary is a Polygon if provided"""
+        from django.contrib.gis.geos import GEOSGeometry
         if value is not None:
-            from django.contrib.gis.geos import GEOSGeometry
-            if hasattr(value, 'geom_type'):
-                if value.geom_type != 'Polygon':
-                    raise serializers.ValidationError(
-                        f"Boundary must be a Polygon geometry, got {value.geom_type}"
-                    )
-            elif isinstance(value, (str, dict)):
-                # If it's still in GeoJSON format, validate it
-                try:
-                    import json
-                    if isinstance(value, dict):
-                        geojson_str = json.dumps(value)
-                    else:
-                        geojson_str = value
-                    geom = GEOSGeometry(geojson_str)
-                    if geom.geom_type != 'Polygon':
-                        raise serializers.ValidationError(
-                            f"Boundary must be a Polygon geometry, got {geom.geom_type}"
-                        )
-                except Exception as e:
-                    raise serializers.ValidationError(f"Invalid boundary geometry: {str(e)}")
+            try:
+                import json
+                geojson_str = json.dumps(value) if isinstance(value, dict) else value
+                geom = GEOSGeometry(geojson_str) if not hasattr(value, 'geom_type') else value
+                if geom.geom_type != 'Polygon':
+                    raise serializers.ValidationError(f"Boundary must be a Polygon geometry, got {geom.geom_type}")
+            except Exception as e:
+                raise serializers.ValidationError(f"Invalid boundary geometry: {str(e)}")
+        return value
+
+    def validate_location(self, value):
+        from django.contrib.gis.geos import GEOSGeometry
+        if value is not None:
+            try:
+                import json
+                geojson_str = json.dumps(value) if isinstance(value, dict) else value
+                geom = GEOSGeometry(geojson_str) if not hasattr(value, 'geom_type') else value
+                if geom.geom_type != 'Point':
+                    raise serializers.ValidationError(f"Location must be a Point geometry, got {geom.geom_type}")
+            except Exception as e:
+                raise serializers.ValidationError(f"Invalid location geometry: {str(e)}")
         return value
 
 
@@ -273,55 +262,65 @@ class FarmSensorSerializer(serializers.ModelSerializer):
 
 
 class FarmIrrigationSerializer(serializers.ModelSerializer):
-    location = GeometryField()
+    geographic = serializers.SerializerMethodField()
+    location = GeometryField(write_only=True, required=True)
+
+    # Crop dates write-only
+    plantation_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
+    foundation_pruning_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
+    fruit_pruning_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
+    last_harvesting_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
+
     irrigation_type_name = serializers.CharField(source='irrigation_type.name', read_only=True)
     irrigation_type_display = serializers.CharField(source='irrigation_type.get_name_display', read_only=True)
-    farm_uid = serializers.CharField(source='farm.farm_uid_str', read_only=True)
+    farm_uid = serializers.CharField(source='farm.farm_uid', read_only=True)
 
     class Meta:
         model = FarmIrrigation
         fields = [
-            'id',
-            'farm',
-            'farm_uid',
-            'irrigation_type',
-            'irrigation_type_name',
-            'irrigation_type_display',
-            'location',
-            'status',
-            # Technical specifications per irrigation type
-            'motor_horsepower',
-            'pipe_width_inches',
-            'distance_motor_to_plot_m',
-            'plants_per_acre',
-            'flow_rate_lph',
-            'emitters_count',
+            'id', 'farm', 'farm_uid', 'irrigation_type', 'irrigation_type_name',
+            'irrigation_type_display', 'status', 'motor_horsepower', 'pipe_width_inches',
+            'distance_motor_to_plot_m', 'plants_per_acre', 'flow_rate_lph', 'emitters_count',
+            'location', 'geographic', 'plantation_date', 'foundation_pruning_date',
+            'fruit_pruning_date', 'last_harvesting_date'
         ]
-        read_only_fields = ['id', 'farm_uid', 'irrigation_type_name', 'irrigation_type_display']
+        read_only_fields = ['id', 'farm_uid', 'irrigation_type_name', 'irrigation_type_display', 'geographic']
 
-    def validate(self, data):
-        """Validate irrigation-specific fields based on irrigation type"""
-        irrigation_type = data.get('irrigation_type')
-        
-        if irrigation_type:
-            irrigation_type_name = irrigation_type.name if hasattr(irrigation_type, 'name') else str(irrigation_type)
-            
-            if irrigation_type_name == 'flood':
-                # Flood irrigation requires: motor_horsepower, pipe_width_inches, distance_motor_to_plot_m
-                if not data.get('motor_horsepower'):
-                    raise serializers.ValidationError("Motor horsepower is required for flood irrigation.")
-                if not data.get('pipe_width_inches'):
-                    raise serializers.ValidationError("Pipe width is required for flood irrigation.")
-                if not data.get('distance_motor_to_plot_m'):
-                    raise serializers.ValidationError("Distance from motor to plot is required for flood irrigation.")
-                    
-            elif irrigation_type_name == 'drip':
-                # Validation for drip irrigation fields is relaxed.
-                # The service layer handles the calculation for plants_per_acre if not provided.
-                pass
-        
-        return data
+    def get_geographic(self, obj):
+        if obj.location:
+            return {"type": "Point", "coordinates": [obj.location.x, obj.location.y]}
+        return None
 
+    def create(self, validated_data):
+        # Pop crop dates before create
+        crop_dates = {}
+        for field in ['plantation_date', 'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date']:
+            crop_dates[field] = validated_data.pop(field, None)
+
+        # Create the instance
+        instance = super().create(validated_data)
+
+        # Assign crop dates
+        for field, value in crop_dates.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        # Pop crop dates before update
+        crop_dates = {}
+        for field in ['plantation_date', 'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date']:
+            if field in validated_data:
+                crop_dates[field] = validated_data.pop(field)
+
+        # Update other fields
+        instance = super().update(instance, validated_data)
+
+        # Assign crop dates
+        for field, value in crop_dates.items():
+            setattr(instance, field, value)
+        instance.save()
+        return instance
 
 class FarmWithIrrigationSerializer(serializers.ModelSerializer):
     """Serializer for creating farms with irrigation in a single request"""

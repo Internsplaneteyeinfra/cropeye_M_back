@@ -34,4 +34,5 @@ urlpatterns = [
     path('', include(router.urls)),
     path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
     path('crop-type-choices/', get_crop_type_choices, name='crop-type-choices'),
+   
 ]

@@ -48,7 +48,6 @@ urlpatterns = [
     # API endpoints
     path('api/', include('users.urls')),
     path('api/', include('farms.urls')), 
-    path('api/', include('farms.urls')),
     path('api/', include('messaging.urls')),  # Messaging system
     path('api/', include('chatbot.urls')),
     path('api/tasks/', include('tasks.urls')),
