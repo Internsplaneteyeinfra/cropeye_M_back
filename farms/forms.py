@@ -22,23 +22,52 @@ class FarmAdminForm(forms.ModelForm):
             'fruit_pruning_date': AdminDateWidget(),
             'last_harvesting_date': AdminDateWidget(),
         }
+class FarmAdminForm(forms.ModelForm):
+    class Meta:
+        model = Farm
+        fields = '__all__'
+        widgets = {
+            'crop_variety': forms.TextInput(attrs={'placeholder': 'Enter crop variety'}),
+            'plantation_date': AdminDateWidget(),
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         crop_category = None
         if self.instance and self.instance.crop_type:
             crop_category = self.instance.crop_type.crop_category
         else:
-            crop_category = 'sugarcane'
+            crop_category = 'sugarcane'  # default
+
+        # Hide fields that might not be needed by default
+        for field in ['plantation_type', 'plantation_method']:
+            if field in self.fields:
+                self.fields[field].widget = forms.HiddenInput()
+
+        # Crop variety should ALWAYS be visible
+        if 'crop_variety' in self.fields:
+            self.fields['crop_variety'].widget = forms.TextInput(
+                attrs={'placeholder': 'Enter crop variety'}
+            )
 
         if crop_category == 'grapes':
-            self.fields['plantation_type'].choices = CropType.GRAPES_PLANTATION_TYPE_CHOICES
-            self.fields['planting_method'].widget = forms.HiddenInput()
-            self.fields['crop_variety'].widget = forms.TextInput()
-        else:
-            self.fields['plantation_type'].choices = CropType.SUGARCANE_PLANTATION_TYPE_CHOICES
-            self.fields['planting_method'].choices = CropType.SUGARCANE_PLANTATION_METHOD_CHOICES
-            self.fields['crop_variety'].widget = forms.HiddenInput()
+            # Grapes → show plantation_type
+            if 'plantation_type' in self.fields:
+                self.fields['plantation_type'].widget = forms.Select(
+                    choices=CropType.GRAPES_PLANTATION_TYPE_CHOICES
+                )
+        else:  # sugarcane
+            # Sugarcane → show plantation_type + plantation_method
+            if 'plantation_type' in self.fields:
+                self.fields['plantation_type'].widget = forms.Select(
+                    choices=CropType.SUGARCANE_PLANTATION_TYPE_CHOICES
+                )
+            if 'plantation_method' in self.fields:
+                self.fields['plantation_method'].widget = forms.Select(
+                    choices=CropType.SUGARCANE_PLANTATION_METHOD_CHOICES
+                )
+
 
 
 # ==============================
