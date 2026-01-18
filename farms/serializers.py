@@ -265,7 +265,18 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
     geographic = serializers.SerializerMethodField()
     location = GeometryField(write_only=True, required=True)
 
-    # Crop dates write-only
+    flow_rate_liter_per_hour = serializers.FloatField(
+        required=False,
+        allow_null=True,
+        source='flow_rate_lph'
+    )
+    emitters_per_plant = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        source='emitters_count'
+    )
+
+    # Crop dates (write-only)
     plantation_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
     foundation_pruning_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
     fruit_pruning_date = serializers.DateTimeField(write_only=True, required=False, allow_null=True)
@@ -278,13 +289,37 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
     class Meta:
         model = FarmIrrigation
         fields = [
-            'id', 'farm', 'farm_uid', 'irrigation_type', 'irrigation_type_name',
-            'irrigation_type_display', 'status', 'motor_horsepower', 'pipe_width_inches',
-            'distance_motor_to_plot_m', 'plants_per_acre', 'flow_rate_lph', 'emitters_count',
-            'location', 'geographic', 'plantation_date', 'foundation_pruning_date',
-            'fruit_pruning_date', 'last_harvesting_date'
+            'id',
+            'farm',
+            'farm_uid',
+            'irrigation_type',
+            'irrigation_type_name',
+            'irrigation_type_display',
+            'status',
+            'motor_horsepower',
+            'pipe_width_inches',
+            'distance_motor_to_plot_m',
+            'plants_per_acre',
+
+            # ✅ frontend names
+            'flow_rate_liter_per_hour',
+            'emitters_per_plant',
+
+            'location',
+            'geographic',
+            'plantation_date',
+            'foundation_pruning_date',
+            'fruit_pruning_date',
+            'last_harvesting_date',
         ]
-        read_only_fields = ['id', 'farm_uid', 'irrigation_type_name', 'irrigation_type_display', 'geographic']
+
+        read_only_fields = [
+            'id',
+            'farm_uid',
+            'irrigation_type_name',
+            'irrigation_type_display',
+            'geographic',
+        ]
 
     def get_geographic(self, obj):
         if obj.location:
@@ -292,35 +327,18 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        # Pop crop dates before create
         crop_dates = {}
         for field in ['plantation_date', 'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date']:
             crop_dates[field] = validated_data.pop(field, None)
 
-        # Create the instance
         instance = super().create(validated_data)
 
-        # Assign crop dates
         for field, value in crop_dates.items():
             setattr(instance, field, value)
+
         instance.save()
         return instance
 
-    def update(self, instance, validated_data):
-        # Pop crop dates before update
-        crop_dates = {}
-        for field in ['plantation_date', 'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date']:
-            if field in validated_data:
-                crop_dates[field] = validated_data.pop(field)
-
-        # Update other fields
-        instance = super().update(instance, validated_data)
-
-        # Assign crop dates
-        for field, value in crop_dates.items():
-            setattr(instance, field, value)
-        instance.save()
-        return instance
 
 class FarmWithIrrigationSerializer(serializers.ModelSerializer):
     """Serializer for creating farms with irrigation in a single request"""
@@ -411,6 +429,7 @@ class FarmWithIrrigationSerializer(serializers.ModelSerializer):
             'plants_per_acre',
             'flow_rate_lph',
             'emitters_count',
+ 
             # Location fields
             'location_lat',
             'location_lng',
@@ -494,82 +513,43 @@ class FarmWithIrrigationSerializer(serializers.ModelSerializer):
             representation['crop_type'] = crop_type_serializer.data
         return representation
 
-class FarmSerializer(serializers.ModelSerializer):
-    farm_owner = UserSerializer(read_only=True)
-    farm_owner_id = serializers.PrimaryKeyRelatedField(
-        source='farm_owner',
-        queryset=User.objects.all(),
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-    created_by = UserSerializer(read_only=True)
-
-    soil_type = SoilTypeSerializer(read_only=True)
-    soil_type_id = serializers.PrimaryKeyRelatedField(
-        source='soil_type',
-        queryset=SoilType.objects.all(),
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-    crop_type = CropTypeSerializer(read_only=True)
-    crop_type_id = serializers.PrimaryKeyRelatedField(
-        source='crop_type',
-        queryset=CropType.objects.all(),
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-    plot = PlotSerializer(read_only=True)
-    plot_id = serializers.PrimaryKeyRelatedField(
-        source='plot',
-        queryset=Plot.objects.all(),
-        write_only=True,
-        required=False,
-        allow_null=True,
-    )
-    
-    # Spacing fields and calculated plants
-    plants_in_field = serializers.ReadOnlyField()
-    
-    # Grapes-specific fields
-    variety_type = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    variety_subtype = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    variety_timing = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    plant_age = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    foundation_pruning_date = serializers.DateField(required=False, allow_null=True)
-    fruit_pruning_date = serializers.DateField(required=False, allow_null=True)
-    last_harvesting_date = serializers.DateField(required=False, allow_null=True)
-    resting_period_days = serializers.IntegerField(required=False, allow_null=True)
-    row_spacing = serializers.DecimalField(required=False, allow_null=True, max_digits=8, decimal_places=2)
-    plant_spacing = serializers.DecimalField(required=False, allow_null=True, max_digits=8, decimal_places=2)
-    flow_rate_liter_per_hour = serializers.DecimalField(required=False, allow_null=True, max_digits=10, decimal_places=2)
-    emitters_per_plant = serializers.IntegerField(required=False, allow_null=True)
-
+class FarmIrrigationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FarmIrrigation
+        fields = [
+            'id',
+            'irrigation_type',
+            'status',
+            'motor_horsepower',
+            'pipe_width_inches',
+            'flow_rate_lph',
+            'emitters_count',
+            'distance_motor_to_plot_m',
+        ]
+class FarmBaseCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id',
-            'farm_uid',
-            'farm_owner',
-            'farm_owner_id',
-            'created_by',
-            'plot',
-            'plot_id',
             'address',
             'area_size',
             'soil_type',
-            'soil_type_id',
+            'plot',
             'crop_type',
-            'crop_type_id',
-            'farm_document',
             'plantation_date',
+        ]
+class GrapeFarmCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Farm
+        fields = [
+            'address',
+            'area_size',
+            'soil_type',
+            'plot',
+            'crop_type',
+            'crop_variety',
             'spacing_a',
             'spacing_b',
-            'crop_variety',
-            'plants_in_field',
-            # Grapes-specific fields
+            'plantation_date',
             'variety_type',
             'variety_subtype',
             'variety_timing',
@@ -578,80 +558,166 @@ class FarmSerializer(serializers.ModelSerializer):
             'fruit_pruning_date',
             'last_harvesting_date',
             'resting_period_days',
+        ]
+
+class SugarcaneFarmCreateSerializer(FarmBaseCreateSerializer):
+    class Meta(FarmBaseCreateSerializer.Meta):
+        fields = FarmBaseCreateSerializer.Meta.fields + [
             'row_spacing',
             'plant_spacing',
-            'flow_rate_liter_per_hour',
-            'emitters_per_plant',
+            'flow_rate_lph',
+            'emitters_count',
+        ]
+
+
+    def create(self, validated_data):
+        request = self.context['request']
+        user = request.user
+
+        validated_data['farm_owner'] = user
+        validated_data['created_by'] = user
+        validated_data['industry'] = user.industry
+
+        return Farm.objects.create(**validated_data)
+
+
+class FarmSerializer(serializers.ModelSerializer):
+    farm_owner = UserSerializer(read_only=True)
+    created_by = UserSerializer(read_only=True)
+
+    farm_owner_id = serializers.PrimaryKeyRelatedField(
+        source='farm_owner',
+        queryset=User.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    soil_type = SoilTypeSerializer(read_only=True)
+    soil_type_id = serializers.PrimaryKeyRelatedField(
+        source='soil_type',
+        queryset=SoilType.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    crop_type = CropTypeSerializer(read_only=True)
+    crop_type_id = serializers.PrimaryKeyRelatedField(
+        source='crop_type',
+        queryset=CropType.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    plot = PlotSerializer(read_only=True)
+    plot_id = serializers.PrimaryKeyRelatedField(
+        source='plot',
+        queryset=Plot.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True
+    )
+
+    irrigations = FarmIrrigationSerializer(many=True, required=False)
+    plants_in_field = serializers.ReadOnlyField()
+
+    class Meta:
+        model = Farm
+        fields = [
+            'id',
+            'farm_uid',
+
+            'industry',
+
+            'farm_owner',
+            'farm_owner_id',
+            'created_by',
+
+            'plot',
+            'plot_id',
+
+            'address',
+            'area_size',
+
+            'soil_type',
+            'soil_type_id',
+
+            'crop_type',
+            'crop_type_id',
+
+            'farm_document',
+            'plantation_date',
+
+            'spacing_a',
+            'spacing_b',
+            'crop_variety',
+
+            # Grapes specific (auto-cleaned by model.clean)
+            'variety_type',
+            'variety_subtype',
+            'variety_timing',
+            'plant_age',
+            'foundation_pruning_date',
+            'fruit_pruning_date',
+            'last_harvesting_date',
+            'resting_period_days',
+
+            'row_spacing',
+            'plant_spacing',
+            'flow_rate_lph',
+            'emitters_count',
+            'irrigations',
+            'plants_in_field',
+
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['farm_uid', 'farm_owner', 'created_by', 'created_at', 'updated_at']
+
+        read_only_fields = [
+            'farm_uid',
+            'created_by',
+            'created_at',
+            'updated_at',
+        ]
 
     def create(self, validated_data):
-        user = self.context['request'].user
+        request = self.context['request']
+        user = request.user
+        irrigations_data = validated_data.pop('irrigations', [])
 
-        # Auto-assign logic for field officers
-        if user.has_role('fieldofficer'):
-            if 'farm_owner' not in validated_data:
-                # Try to auto-assign the most recent farmer
-                try:
-                    from .auto_assignment_service import AutoAssignmentService
-                    recent_farmer = AutoAssignmentService.get_most_recent_farmer_by_field_officer(user)
-                    
-                    if recent_farmer:
-                        validated_data['farm_owner'] = recent_farmer
-                        validated_data['created_by'] = user
-                    else:
-                        raise serializers.ValidationError({
-                            'farm_owner_id': 'No recent farmer found. Please specify farm_owner_id or create a farmer first.'
-                        })
-                except Exception as e:
-                    raise serializers.ValidationError({
-                        'farm_owner_id': f'Auto-assignment failed: {str(e)}. Please specify farm_owner_id.'
-                    })
+        if user.has_role('fieldofficer') and 'farm_owner' not in validated_data:
+            recent_farmer = AutoAssignmentService.get_most_recent_farmer_by_field_officer(user)
+            if not recent_farmer:
+                raise serializers.ValidationError({
+                    'farm_owner_id': 'No recent farmer found. Please provide farm_owner_id.'
+                })
+            validated_data['farm_owner'] = recent_farmer
+            validated_data['created_by'] = user
 
-        # Default to the request user if farm_owner is not specified and not a field officer
         validated_data.setdefault('farm_owner', user)
-        # created_by will be set in the view perform_create
-        return super().create(validated_data)
-    
-    def to_representation(self, instance):
-        # Override to pass farm instance to CropTypeSerializer and conditionally show/hide fields
-        representation = super().to_representation(instance)
-        
-        # Get crop category from crop_type
-        crop_category = None
-        if instance.crop_type and hasattr(instance.crop_type, 'crop_category'):
-            crop_category = instance.crop_type.crop_category
-        
-        # Conditionally hide/show fields based on crop category
-        if crop_category != 'grapes':
-            # Hide grapes-specific fields for non-grapes crops
-            grapes_fields = [
-                'variety_type', 'variety_subtype', 'variety_timing',
-                'plant_age', 'foundation_pruning_date', 'fruit_pruning_date',
-                'last_harvesting_date', 'resting_period_days',
-                'row_spacing', 'plant_spacing', 'flow_rate_liter_per_hour', 'emitters_per_plant'
-            ]
-            for field in grapes_fields:
-                representation.pop(field, None)
-        
-        if crop_category == 'grapes':
-            # Hide sugarcane-specific fields for grapes
-            sugarcane_fields = ['spacing_a', 'spacing_b']
-            for field in sugarcane_fields:
-                representation.pop(field, None)
-        
-        # Pass farm instance to crop_type serializer context
-        if 'crop_type' in representation and instance.crop_type:
-            crop_type_serializer = CropTypeSerializer(
-                instance.crop_type,
-                context={'farm': instance, **self.context}
-            )
-            representation['crop_type'] = crop_type_serializer.data
-        
-        return representation
+        validated_data.setdefault('created_by', user)
+        validated_data.setdefault('industry', user.industry)
 
+        farm = Farm.objects.create(**validated_data)
+
+        for irrigation in irrigations_data:
+            FarmIrrigation.objects.create(farm=farm, **irrigation)
+
+        return farm
+
+    def update(self, instance, validated_data):
+        irrigations_data = validated_data.pop('irrigations', None)
+
+        farm = super().update(instance, validated_data)
+
+        if irrigations_data is not None:
+            instance.irrigations.all().delete()
+            for irrigation in irrigations_data:
+                FarmIrrigation.objects.create(farm=farm, **irrigation)
+
+        return farm
 
 class FarmDetailSerializer(FarmSerializer):
     images      = FarmImageSerializer(many=True, read_only=True)
@@ -682,7 +748,6 @@ class PlotGeoSerializer(GeoFeatureModelSerializer):
             'pin_code',
             'boundary',
         ]
-
 
 class FarmGeoSerializer(GeoFeatureModelSerializer):
     class Meta:

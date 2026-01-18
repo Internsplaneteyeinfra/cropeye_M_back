@@ -36,6 +36,11 @@ from .serializers import (
     FarmSensorSerializer,
     FarmIrrigationSerializer,
     IrrigationTypeSerializer,
+    GrapeFarmCreateSerializer,
+    SugarcaneFarmCreateSerializer,
+   
+
+
 )
 
 
@@ -169,8 +174,6 @@ class CropTypeViewSet(viewsets.ModelViewSet):
         user = self.request.user
         user_industry = get_user_industry(user)
         serializer.save(industry=user_industry)
-
-
 class FarmViewSet(viewsets.ModelViewSet):
     queryset = Farm.objects.all()
     serializer_class = FarmSerializer
@@ -178,84 +181,162 @@ class FarmViewSet(viewsets.ModelViewSet):
     filterset_fields = ['soil_type', 'crop_type', 'farm_owner']
     search_fields = ['address', 'farm_owner__username']
 
+
     def get_serializer_class(self):
+        from .serializers import (
+            FarmSerializer,
+            FarmDetailSerializer,
+            FarmGeoSerializer,
+            GrapeFarmCreateSerializer,
+            SugarcaneFarmCreateSerializer,
+            FarmWithIrrigationSerializer,
+        )
+
+        # Detail view
         if self.action == 'retrieve':
             return FarmDetailSerializer
+
+        # GeoJSON view
         if self.action == 'geojson':
             return FarmGeoSerializer
-        if self.action == 'create':
-            return FarmWithIrrigationSerializer
+
+        # Create, Update, Partial Update
+        if self.action in ['create', 'update', 'partial_update']:
+            crop_category = self.request.data.get('crop_category')
+            if crop_category == 'grapes':
+                return GrapeFarmCreateSerializer
+            elif crop_category == 'sugarcane':
+                return SugarcaneFarmCreateSerializer
+            else:
+                return FarmWithIrrigationSerializer
+
+        # List view with optional crop_category filter
+        if self.action == 'list':
+            crop_category = self.request.query_params.get('crop_category')
+            if crop_category == 'grapes':
+                return GrapeFarmCreateSerializer
+            elif crop_category == 'sugarcane':
+                return SugarcaneFarmCreateSerializer
+
+        # Default fallback for delete or other actions
         return FarmSerializer
 
     def get_permissions(self):
-        # Allow farmers to perform all operations (create, read, update, delete)
-        return [permissions.IsAuthenticated()]
-
+            # Allow farmers to perform all operations (create, read, update, delete)
+            return [permissions.IsAuthenticated()]
     def get_queryset(self):
-        qs = super().get_queryset()
-        user = self.request.user
+            user = self.request.user  # logged-in user
+            qs = Farm.objects.all()   # start with all farms
 
-        # Apply multi-tenant filtering
-        qs = filter_by_industry(qs, user)
-
-        # Farmers can see all farms (not just their own) - removed farmer-specific filtering
-        # filter by owner id
-        if owner_id := self.request.query_params.get('owner'):
-            if owner_id.isdigit():
-                qs = qs.filter(farm_owner_id=owner_id)
-
-        # only my farms (optional filter, farmers can still use this to filter to their own)
-        if self.request.query_params.get('my_farms') == 'true':
-            qs = qs.filter(farm_owner=user)
-
-        # geographic search
-        lat = self.request.query_params.get('lat')
-        lng = self.request.query_params.get('lng')
-        radius = self.request.query_params.get('radius')
-        if lat and lng and radius:
+        # ----------------------------
+        # 1️⃣ Industry / tenant filter (if exists)
+        # ----------------------------
             try:
-                lat, lng, km = float(lat), float(lng), float(radius)
-                user_loc = Point(lng, lat, srid=4326)
-                qs = (
-                    qs.filter(plot__location__distance_lte=(user_loc, D(km=km)))
-                    .annotate(distance=Distance('plot__location', user_loc))
-                    .order_by('distance')
-                )
-            except ValueError:
-                pass
+                qs = filter_by_industry(qs, user)
+            except NameError:
+                pass  # skip if filter_by_industry not defined
 
-        # text search
-        if search := self.request.query_params.get('search'):
-            qs = qs.filter(
-                Q(address__icontains=search) | Q(farm_owner__username__icontains=search)
+        # ----------------------------
+        # 2️⃣ Filter by owner id (optional)
+        # ----------------------------
+            owner_id = self.request.query_params.get('owner')
+            if owner_id and owner_id.isdigit():
+                qs = qs.filter(farm_owner_id=int(owner_id))
+
+        # ----------------------------
+        # 3️⃣ Filter only my farms (optional)
+        # ----------------------------
+            if self.request.query_params.get('my_farms') == 'true':
+                qs = qs.filter(farm_owner=user)
+
+        # ----------------------------
+        # 4️⃣ Filter by crop category (optional)
+        # ----------------------------
+            crop_category = self.request.query_params.get('crop_category')
+            if crop_category in ['grapes', 'sugarcane']:
+                qs = qs.filter(crop_type__crop_category=crop_category)
+
+        # ----------------------------
+        # 5️⃣ Geographic / radius search (optional)
+        # ----------------------------
+            lat = self.request.query_params.get('lat')
+            lng = self.request.query_params.get('lng')
+            radius = self.request.query_params.get('radius')
+            if lat and lng and radius:
+                try:
+                    from django.contrib.gis.geos import Point
+                    from django.contrib.gis.db.models.functions import Distance
+                    from django.contrib.gis.measure import D
+
+                    lat, lng, km = float(lat), float(lng), float(radius)
+                    user_loc = Point(lng, lat, srid=4326)
+                    qs = (
+                        qs.filter(plot__location__distance_lte=(user_loc, D(km=km)))
+                        .annotate(distance=Distance('plot__location', user_loc))
+                        .order_by('distance')
+                    )
+                except ValueError:
+                    pass  # ignore invalid numbers
+
+        # ----------------------------
+        # 6️⃣ Text search (optional)
+        # ----------------------------
+            search = self.request.query_params.get('search')
+            if search:
+                qs = qs.filter(
+                    Q(address__icontains=search) | Q(farm_owner__username__icontains=search)
+                )
+
+        # ----------------------------
+        # 7️⃣ Optimize queries and avoid nulls in GET
+        # ----------------------------
+            qs = qs.select_related(
+                    'farm_owner', 'created_by', 'soil_type', 'crop_type', 'plot'
+            ).prefetch_related(
+            'irrigations'
             )
 
-        return qs
+        # ----------------------------
+        # 8️⃣ Return final queryset
+        # ----------------------------
+            return qs
+
+
+
 
     def perform_create(self, serializer):
-        user = self.request.user
-        data = self.request.data
+       user = self.request.user
+       data = self.request.data
 
-        # If farmer is creating farm, auto-assign to themselves
-        if user.has_role('farmer'):
-            if not data.get('farm_owner'):
-                # Auto-assign to the farmer creating the farm
-                serializer.save(farm_owner=user, created_by=user, industry=user.industry)
-            else:
-                # Validate that farmer can only assign to themselves
-                farm_owner_id = data.get('farm_owner')
-                if isinstance(farm_owner_id, dict):
-                    farm_owner_id = farm_owner_id.get('id')
-                if str(farm_owner_id) != str(user.id):
-                    raise ValidationError("Farmers can only create farms for themselves.")
-                serializer.save(farm_owner=user, created_by=user, industry=user.industry)
-        # field officer must assign farm_owner
-        elif user.has_role('fieldofficer') and not data.get('farm_owner'):
-            raise ValidationError("Field Officer must assign a farm_owner.")
-        else:
-            # Assign industry from user
-           user_industry = get_user_industry(user)
-           serializer.save(created_by=user, industry=user_industry)
+    # Get crop category from request
+       crop_category = data.get('crop_category')
+
+       if not crop_category:
+           raise ValidationError({"crop_category": "This field is required."})
+
+       if crop_category not in ['grapes', 'sugarcane']:
+        # If not grapes or sugarcane, fallback to FarmWithIrrigationSerializer
+           crop_category = 'other'
+
+    # Determine farm_owner based on role
+       if user.has_role('farmer'):
+           farm_owner = user
+        # Farmers can only assign farms to themselves
+           if data.get('farm_owner') and str(data.get('farm_owner')) != str(user.id):
+               raise ValidationError({"farm_owner": "Farmers can only create farms for themselves."})
+       elif user.has_role('fieldofficer'):
+           farm_owner = data.get('farm_owner')
+           if not farm_owner:
+               raise ValidationError({"farm_owner": "Field Officer must assign a farm_owner."})
+       else:
+        # Admin or other roles
+           farm_owner = data.get('farm_owner', user)
+
+    # Assign industry from user if available
+       industry = getattr(user, 'industry', get_user_industry(user))
+
+    # Save using the appropriate serializer
+       serializer.save(farm_owner=farm_owner, created_by=user, industry=industry)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -278,7 +359,6 @@ class FarmViewSet(viewsets.ModelViewSet):
 
         try:
             from django.contrib.auth import get_user_model
-            from django.contrib.auth.models import User as AuthUser
             User = get_user_model()
 
             # Get all farmers created by this field officer
@@ -310,12 +390,11 @@ class FarmViewSet(viewsets.ModelViewSet):
                     fastapi_plot_id = generate_fastapi_plot_id(plot)
 
                     # Get farm details for this plot
-                    # Use select_related to fetch ForeignKey relationships efficiently
                     farms = plot.farms.all().select_related(
-                        'crop_type', 
+                        'crop_type',
                         'soil_type'
                     ).prefetch_related('irrigations__irrigation_type')
-                    
+
                     farm_details = []
 
                     for farm in farms:
@@ -337,7 +416,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                         # Get plantation_type and planting_method display names from choice fields
                         plantation_type_name = None
                         planting_method_name = None
-                        
+
                         if farm.crop_type:
                             if farm.crop_type.plantation_type:
                                 plantation_type_name = farm.crop_type.get_plantation_type_display()
@@ -429,95 +508,6 @@ class FarmViewSet(viewsets.ModelViewSet):
         """
         Complete farmer registration endpoint - creates farmer, plot, farm, and irrigation in one call
         Supports both single plot and multiple plots registration.
-        
-        ACCESS: 
-        - Field officers can register any farmer
-        - Farmers can register themselves (if not authenticated or authenticated as farmer)
-        
-        Expected JSON structure (multiple plots):
-        {
-            "farmer": {
-                "username": "testmulti",
-                "email": "testmulti@example.com",
-                "password": "farm@123",
-                "first_name": "testmulti",
-                "last_name": "Patil",
-                "phone_number": "9870543211",
-                "address": "Main Street",
-                "village": "Test Village",
-                "district": "Test District",
-                "state": "Maharashtra",
-                "taluka": "Test Taluka"
-            },
-            "plots": [
-                {
-                    "plot": {
-                        "gat_number": "866",
-                        "plot_number": "07",
-                        "village": "Test Village",
-                        "taluka": "Test Taluka",
-                        "district": "Test District",
-                        "state": "Maharashtra",
-                        "country": "India",
-                        "pin_code": "422605",
-                        "location": {"type": "Point", "coordinates": [74.215, 19.567]}
-                    },
-                    "farm": {
-                        "address": "Farm at GAT 866",
-                        "area_size": "2.5",
-                        "spacing_a": "3.0",
-                        "spacing_b": "1.5",
-                        "soil_type_name": "Black Soil",
-                        "crop_type_name": "Sugarcane",
-                        "plantation_type": "adsali"
-                    },
-                    "irrigation": {
-                        "irrigation_type_name": "drip",
-                        "status": true,
-                        "flow_rate_lph": 2.0,
-                        "emitters_count": 120
-                    }
-                },
-                {
-                    "plot": {
-                        "gat_number": "904",
-                        "plot_number": "05",
-                        "village": "Test Village",
-                        "taluka": "Test Taluka",
-                        "district": "Test District",
-                        "state": "Maharashtra",
-                        "country": "India",
-                        "pin_code": "422605",
-                        "location": {"type": "Point", "coordinates": [74.218, 19.569]}
-                    },
-                    "farm": {
-                        "address": "Farm at GAT 907",
-                        "area_size": "3.0",
-                        "spacing_a": "2.0",
-                        "spacing_b": "1.0",
-                        "soil_type_name": "Red Soil",
-                        "crop_type_name": "sugarcane",
-                        "plantation_type": "pre_seasonal"
-                    },
-                    "irrigation": {
-                        "irrigation_type_name": "flood",
-                        "motor_horsepower": 7.5,
-                        "pipe_width_inches": 4.0,
-                        "distance_motor_to_plot_m": 50.0
-                    }
-                }
-            ]
-        }
-        
-        For backward compatibility, single plot format is also supported:
-        {
-            "farmer": {...},
-            "plot": {...},
-            "farm": {...},
-            "irrigation": {...}
-        }
-        
-        Note: Irrigation type names should be lowercase: "drip", "flood", "sprinkler", etc.
         """
         user = request.user
 
@@ -535,7 +525,7 @@ class FarmViewSet(viewsets.ModelViewSet):
 
             # Determine if this is self-registration or field officer registration
             farmer_data = request.data.get('farmer', {})
-            
+
             # If user is authenticated as a farmer and wants to add plots/farms
             if user.is_authenticated and user.has_role('farmer'):
                 # Farmer is adding plots/farms to their existing account
@@ -545,7 +535,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                 # New farmer registration (either by field officer or self-registration)
                 farmer = None
                 field_officer = user if (user.is_authenticated and user.has_role('fieldofficer')) else None
-            
+
             # Perform complete registration
             result = CompleteFarmerRegistrationService.register_complete_farmer(
                 request.data,
@@ -588,20 +578,6 @@ class FarmViewSet(viewsets.ModelViewSet):
     def quick_farmer_registration(self, request):
         """
         Quick farmer registration - creates only farmer (simplified version)
-        Expected JSON structure:
-        {
-            "username": "farmer123",
-            "email": "farmer@example.com",
-            "password": "password123",
-            "first_name": "John",
-            "last_name": "Doe",
-            "phone_number": "9876543210",
-            "address": "Village Address",
-            "village": "Village Name",
-            "district": "District Name",
-            "state": "State Name",
-            "taluka": "Taluka Name"
-        }
         """
         user = request.user
 
@@ -619,7 +595,7 @@ class FarmViewSet(viewsets.ModelViewSet):
 
             # Create farmer only
             farmer_data = request.data
-            
+
             # Determine if this is self-registration or field officer registration
             field_officer = user if (user.is_authenticated and user.has_role('fieldofficer')) else None
             farmer = CompleteFarmerRegistrationService._create_farmer(farmer_data, field_officer)
@@ -1119,7 +1095,6 @@ class FarmViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': str(e)
             }, status=400)
-
 
 class PlotViewSet(viewsets.ModelViewSet):
     queryset = Plot.objects.all()

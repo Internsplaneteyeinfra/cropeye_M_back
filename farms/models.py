@@ -624,6 +624,24 @@ class Farm(models.Model):
             return int(plants)
         except (ValueError, ZeroDivisionError, TypeError):
             return None
+        
+
+    def clean(self):
+        # Only allow grape-specific fields for grapes
+        if self.crop_type and self.crop_type.crop_category != 'grapes':
+            self.variety_type = None
+            self.variety_subtype = None
+            self.variety_timing = None
+            self.plant_age = None
+            self.foundation_pruning_date = None
+            self.fruit_pruning_date = None
+            self.last_harvesting_date = None
+            self.resting_period_days = None
+            self.row_spacing = None
+            self.plant_spacing = None
+            self.flow_rate_liter_per_hour = None
+            self.emitters_per_plant = None
+        super().clean()
 
 
 class FarmIrrigation(models.Model):
@@ -651,35 +669,6 @@ class FarmIrrigation(models.Model):
     def __str__(self):
         return f"{self.farm.farm_uid_str()} – {self.irrigation_type.name if self.irrigation_type else 'Unknown'}"
 
-    def clean(self):
-        """Ensure required fields for each irrigation type."""
-        if self.irrigation_type:
-            name = self.irrigation_type.name
-            if name == 'flood':
-                if not self.motor_horsepower:
-                    raise ValidationError("Motor horsepower is required for flood irrigation.")
-                if not self.pipe_width_inches:
-                    raise ValidationError("Pipe width is required for flood irrigation.")
-                if not self.distance_motor_to_plot_m:
-                    raise ValidationError("Distance from motor to plot is required for flood irrigation.")
-            elif name == 'drip':
-                # These fields are now optional as they can be calculated or are not always required.
-                # We can keep some soft validation if needed, but for now, we'll relax it.
-                # For example, if flow_rate is given, emitters_count might be expected.
-                if self.flow_rate_lph and not self.emitters_count:
-                    # This is an example of a softer validation. For now, we remove the strict checks.
-                    pass
-                # The strict check for plants_per_acre is removed to allow for automatic calculation.
-
-            elif name == 'sprinkler' and not self.pipe_width_inches:
-                raise ValidationError("Pipe width (inches) is required for sprinkler irrigation.")
-
-        super().clean()
-
-    def save(self, *args, **kwargs):
-        # enforce clean() on every save
-        self.full_clean()
-        super().save(*args, **kwargs)
 
 
 class FarmSensor(models.Model):
