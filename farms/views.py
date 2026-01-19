@@ -8,6 +8,8 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
+from rest_framework import status
+
 from users.multi_tenant_utils import filter_by_industry, get_user_industry
 from .models import (
     SoilType,
@@ -36,8 +38,8 @@ from .serializers import (
     FarmSensorSerializer,
     FarmIrrigationSerializer,
     IrrigationTypeSerializer,
-    GrapeFarmCreateSerializer,
-    SugarcaneFarmCreateSerializer,
+    
+    
    
 
 
@@ -187,8 +189,6 @@ class FarmViewSet(viewsets.ModelViewSet):
             FarmSerializer,
             FarmDetailSerializer,
             FarmGeoSerializer,
-            GrapeFarmCreateSerializer,
-            SugarcaneFarmCreateSerializer,
             FarmWithIrrigationSerializer,
         )
 
@@ -202,141 +202,92 @@ class FarmViewSet(viewsets.ModelViewSet):
 
         # Create, Update, Partial Update
         if self.action in ['create', 'update', 'partial_update']:
-            crop_category = self.request.data.get('crop_category')
-            if crop_category == 'grapes':
-                return GrapeFarmCreateSerializer
-            elif crop_category == 'sugarcane':
-                return SugarcaneFarmCreateSerializer
-            else:
-                return FarmWithIrrigationSerializer
+            return FarmWithIrrigationSerializer
 
-        # List view with optional crop_category filter
-        if self.action == 'list':
-            crop_category = self.request.query_params.get('crop_category')
-            if crop_category == 'grapes':
-                return GrapeFarmCreateSerializer
-            elif crop_category == 'sugarcane':
-                return SugarcaneFarmCreateSerializer
-
-        # Default fallback for delete or other actions
+        # Default fallback (list, destroy, etc.)
         return FarmSerializer
+
 
     def get_permissions(self):
             # Allow farmers to perform all operations (create, read, update, delete)
             return [permissions.IsAuthenticated()]
     def get_queryset(self):
-            user = self.request.user  # logged-in user
-            qs = Farm.objects.all()   # start with all farms
+        """
+        Return farms based on the logged-in user's role:
+        - Farmers: only their own farms
+        - Superusers: all farms
+        """
+        user = self.request.user
 
-        # ----------------------------
-        # 1️⃣ Industry / tenant filter (if exists)
-        # ----------------------------
-            try:
-                qs = filter_by_industry(qs, user)
-            except NameError:
-                pass  # skip if filter_by_industry not defined
+        if user.is_superuser:
+            qs = Farm.objects.all()  # Superuser can see all farms
+        else:
+            # Normal farmers or staff: only their own farms
+            qs = Farm.objects.filter(farm_owner=user)
 
-        # ----------------------------
-        # 2️⃣ Filter by owner id (optional)
-        # ----------------------------
-            owner_id = self.request.query_params.get('owner')
-            if owner_id and owner_id.isdigit():
-                qs = qs.filter(farm_owner_id=int(owner_id))
+        # Optimize queries
+        qs = qs.select_related(
+            'farm_owner',
+            'created_by',
+            'soil_type',
+            'crop_type',
+            'plot'
+        ).prefetch_related(
+            'irrigations',
+            'images',   # optional if you have related images
+            'sensors'   # optional if you have related sensors
+        )
 
-        # ----------------------------
-        # 3️⃣ Filter only my farms (optional)
-        # ----------------------------
-            if self.request.query_params.get('my_farms') == 'true':
-                qs = qs.filter(farm_owner=user)
-
-        # ----------------------------
-        # 4️⃣ Filter by crop category (optional)
-        # ----------------------------
-            crop_category = self.request.query_params.get('crop_category')
-            if crop_category in ['grapes', 'sugarcane']:
-                qs = qs.filter(crop_type__crop_category=crop_category)
-
-        # ----------------------------
-        # 5️⃣ Geographic / radius search (optional)
-        # ----------------------------
-            lat = self.request.query_params.get('lat')
-            lng = self.request.query_params.get('lng')
-            radius = self.request.query_params.get('radius')
-            if lat and lng and radius:
-                try:
-                    from django.contrib.gis.geos import Point
-                    from django.contrib.gis.db.models.functions import Distance
-                    from django.contrib.gis.measure import D
-
-                    lat, lng, km = float(lat), float(lng), float(radius)
-                    user_loc = Point(lng, lat, srid=4326)
-                    qs = (
-                        qs.filter(plot__location__distance_lte=(user_loc, D(km=km)))
-                        .annotate(distance=Distance('plot__location', user_loc))
-                        .order_by('distance')
-                    )
-                except ValueError:
-                    pass  # ignore invalid numbers
-
-        # ----------------------------
-        # 6️⃣ Text search (optional)
-        # ----------------------------
-            search = self.request.query_params.get('search')
-            if search:
-                qs = qs.filter(
-                    Q(address__icontains=search) | Q(farm_owner__username__icontains=search)
-                )
-
-        # ----------------------------
-        # 7️⃣ Optimize queries and avoid nulls in GET
-        # ----------------------------
-            qs = qs.select_related(
-                    'farm_owner', 'created_by', 'soil_type', 'crop_type', 'plot'
-            ).prefetch_related(
-            'irrigations'
-            )
-
-        # ----------------------------
-        # 8️⃣ Return final queryset
-        # ----------------------------
-            return qs
+        return qs
 
 
 
 
     def perform_create(self, serializer):
-       user = self.request.user
-       data = self.request.data
+        user = self.request.user
+        data = self.request.data
 
-    # Get crop category from request
-       crop_category = data.get('crop_category')
+        # Determine farm_owner based on role
+        if user.has_role('farmer'):
+            farm_owner = user
+            if data.get('farm_owner') and str(data.get('farm_owner')) != str(user.id):
+                raise ValidationError({
+                    "farm_owner": "Farmers can only create farms for themselves."
+                })
 
-       if not crop_category:
-           raise ValidationError({"crop_category": "This field is required."})
+        elif user.is_superuser:
+            farm_owner_id = data.get('farm_owner')
+            if farm_owner_id:
+                User = get_user_model()
+                try:
+                    farm_owner = User.objects.get(id=farm_owner_id)
+                except User.DoesNotExist:
+                    raise ValidationError({
+                        "farm_owner": "Invalid farm_owner ID."
+                    })
+            else:
+                farm_owner = user
 
-       if crop_category not in ['grapes', 'sugarcane']:
-        # If not grapes or sugarcane, fallback to FarmWithIrrigationSerializer
-           crop_category = 'other'
+        else:
+            raise ValidationError({
+                "detail": "You do not have permission to create a farm."
+            })
 
-    # Determine farm_owner based on role
-       if user.has_role('farmer'):
-           farm_owner = user
-        # Farmers can only assign farms to themselves
-           if data.get('farm_owner') and str(data.get('farm_owner')) != str(user.id):
-               raise ValidationError({"farm_owner": "Farmers can only create farms for themselves."})
-       elif user.has_role('fieldofficer'):
-           farm_owner = data.get('farm_owner')
-           if not farm_owner:
-               raise ValidationError({"farm_owner": "Field Officer must assign a farm_owner."})
-       else:
-        # Admin or other roles
-           farm_owner = data.get('farm_owner', user)
+        industry = getattr(user, 'industry', get_user_industry(user))
 
-    # Assign industry from user if available
-       industry = getattr(user, 'industry', get_user_industry(user))
+        serializer.save(
+        farm_owner=farm_owner,
+        created_by=user,
+        industry=industry,
+        crop_variety=data.get('crop_variety'),
+        variety_type=data.get('variety_type'),
+        variety_subtype=data.get('variety_subtype'),
+        variety_timing=data.get('variety_timing'),
+        plant_age=data.get('plant_age'),
+        spacing_a=data.get('spacing_a'),
+        spacing_b=data.get('spacing_b'),
+    )
 
-    # Save using the appropriate serializer
-       serializer.save(farm_owner=farm_owner, created_by=user, industry=industry)
 
     def perform_update(self, serializer):
         user = self.request.user
@@ -1095,6 +1046,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                 'success': False,
                 'error': str(e)
             }, status=400)
+        
+from django.db import transaction
 
 class PlotViewSet(viewsets.ModelViewSet):
     queryset = Plot.objects.all()
@@ -1104,8 +1057,15 @@ class PlotViewSet(viewsets.ModelViewSet):
     search_fields = ['gat_number', 'plot_number', 'village', 'district']
 
     def get_serializer_class(self):
+        """
+        Return appropriate serializer class for each action.
+        """
         if self.action == 'geojson':
             return PlotGeoSerializer
+        # For create/update/partial_update, we use the main PlotSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return PlotSerializer
+        # For list/retrieve and others
         return PlotSerializer
 
     def get_queryset(self):
@@ -1130,24 +1090,113 @@ class PlotViewSet(viewsets.ModelViewSet):
            qs = qs.filter(boundary__isnull=False)
 
         return qs.distinct()
+  
 
+    
+
+    def create(self, request, *args, **kwargs):
+        data = request.data
+        user = request.user
+        user_industry = get_user_industry(user)
+
+        # 🔹 MULTIPLE PLOTS
+        if isinstance(data, list):
+            serializer = self.get_serializer(
+                data=data,
+                many=True,
+                context={'request': request}
+            )
+            serializer.is_valid(raise_exception=True)
+
+            created_instances = []
+
+            #  Ensure ALL plots succeed or NONE
+            with transaction.atomic():
+
+                #  Detect duplicates inside same request
+                seen = set()
+                for item in serializer.validated_data:
+                    key = (
+                        item.get('gat_number'),
+                        item.get('plot_number'),
+                        item.get('village'),
+                        item.get('taluka'),
+                        item.get('district'),
+                    )
+                    if key in seen:
+                        return Response(
+                            {
+                                "detail": "Duplicate plot found inside the same request."
+                            },
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    seen.add(key)
+
+                #  Create plots
+                for item in serializer.validated_data:
+                    plot = Plot(
+                        **item,
+                        industry=user_industry,
+                        created_by=user if user.is_authenticated else None,
+                    )
+
+                    # Assign farmer based on role
+                    if user.has_role('farmer'):
+                        plot.farmer = user
+
+                    # Skip FastAPI sync during bulk
+                    plot._skip_fastapi_sync = True
+                    plot.save()
+
+                    created_instances.append(plot)
+
+            #  Serialize response
+            output = self.get_serializer(created_instances, many=True)
+            return Response(output.data, status=status.HTTP_201_CREATED)
+
+        # 🔹 SINGLE PLOT → default DRF behavior
+        return super().create(request, *args, **kwargs)
+
+
+   
     def perform_create(self, serializer):
         user = self.request.user
-        # Get user's industry
         user_industry = get_user_industry(user)
-        
-        # If farmer is creating plot, auto-assign to themselves
-        if user.has_role('farmer'):
-            serializer.save(
-                farmer=user,
-                created_by=user,
-                industry=user_industry
-            )
-        # Field officers or admin can assign to any farmer
-        elif user.has_any_role(['fieldofficer', 'admin', 'manager']):
-            serializer.save(created_by=user, industry=user_industry)
+
+        data = self.request.data
+
+        # If data is a list, handle multiple plots
+        if isinstance(data, list):
+            created_instances = []
+            for item in data:
+                item_serializer = self.get_serializer(data=item)
+                item_serializer.is_valid(raise_exception=True)
+
+                # Assign farmer/created_by/industry as before
+                if user.has_role('farmer'):
+                    instance = item_serializer.save(
+                        farmer=user,
+                        created_by=user,
+                        industry=user_industry
+                    )
+                elif user.has_any_role(['fieldofficer', 'admin', 'manager']):
+                    instance = item_serializer.save(created_by=user, industry=user_industry)
+                else:
+                    instance = item_serializer.save(industry=user_industry)
+                
+                created_instances.append(instance)
+            
+            return created_instances
         else:
-            serializer.save(industry=user_industry)
+            # Single plot
+            if user.has_role('farmer'):
+                serializer.save(farmer=user, created_by=user, industry=user_industry)
+            elif user.has_any_role(['fieldofficer', 'admin', 'manager']):
+                serializer.save(created_by=user, industry=user_industry)
+            else:
+                serializer.save(industry=user_industry)
+
+
 
     def perform_update(self, serializer):
         serializer.save()

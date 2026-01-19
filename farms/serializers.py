@@ -171,8 +171,8 @@ class PlotSerializer(serializers.ModelSerializer):
         help_text='Polygon geometry as GeoJSON: {"type": "Polygon", "coordinates": [[[lng, lat], ...]]}'
     )
 
-    farmer = UserSerializer(read_only=True)
-    created_by = UserSerializer(read_only=True)
+    farmer = serializers.SerializerMethodField(read_only=True)
+    created_by = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Plot
@@ -195,12 +195,32 @@ class PlotSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['farmer', 'created_by', 'created_at', 'updated_at']
 
-    def validate_boundary(self, value):
-        from django.contrib.gis.geos import GEOSGeometry
+
+
+    # Optional: Show farmer info
+    def get_farmer(self, obj):
+        return obj.farmer.username if obj.farmer else None
+
+    def get_created_by(self, obj):
+        return obj.created_by.username if obj.created_by else None
+
+    # Validate location
+    def validate_location(self, value):
         if value is not None:
             try:
-                import json
-                geojson_str = json.dumps(value) if isinstance(value, dict) else value
+                geojson_str = value if hasattr(value, 'geom_type') else value
+                geom = GEOSGeometry(geojson_str) if not hasattr(value, 'geom_type') else value
+                if geom.geom_type != 'Point':
+                    raise serializers.ValidationError(f"Location must be a Point geometry, got {geom.geom_type}")
+            except Exception as e:
+                raise serializers.ValidationError(f"Invalid location geometry: {str(e)}")
+        return value
+
+    # Validate boundary
+    def validate_boundary(self, value):
+        if value is not None:
+            try:
+                geojson_str = value if hasattr(value, 'geom_type') else value
                 geom = GEOSGeometry(geojson_str) if not hasattr(value, 'geom_type') else value
                 if geom.geom_type != 'Polygon':
                     raise serializers.ValidationError(f"Boundary must be a Polygon geometry, got {geom.geom_type}")
@@ -208,18 +228,40 @@ class PlotSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Invalid boundary geometry: {str(e)}")
         return value
 
-    def validate_location(self, value):
-        from django.contrib.gis.geos import GEOSGeometry
-        if value is not None:
-            try:
-                import json
-                geojson_str = json.dumps(value) if isinstance(value, dict) else value
-                geom = GEOSGeometry(geojson_str) if not hasattr(value, 'geom_type') else value
-                if geom.geom_type != 'Point':
-                    raise serializers.ValidationError(f"Location must be a Point geometry, got {geom.geom_type}")
-            except Exception as e:
-                raise serializers.ValidationError(f"Invalid location geometry: {str(e)}")
-        return value
+    # Validate uniqueness of plot
+    def validate(self, attrs):
+            farmer = self.context['request'].user if self.context['request'] else None
+
+            gat = attrs.get('gat_number')
+            plot = attrs.get('plot_number')
+            village = attrs.get('village')
+            taluka = attrs.get('taluka')
+            district = attrs.get('district')
+
+            # 🔹 Global check
+            if Plot.objects.filter(
+                gat_number=gat,
+                plot_number=plot,
+                village=village,
+                taluka=taluka,
+                district=district
+            ).exists():
+                raise serializers.ValidationError(
+                    "This plot already exists globally."
+                )
+
+            # 🔹 Farmer-level check
+            if farmer and Plot.objects.filter(
+                farmer=farmer,
+                gat_number=gat,
+                plot_number=plot,
+                village=village
+            ).exists():
+                raise serializers.ValidationError(
+                    "This farmer already has this plot."
+                )
+
+            return attrs
 
 
 class FarmImageSerializer(serializers.ModelSerializer):
@@ -301,7 +343,7 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
             'distance_motor_to_plot_m',
             'plants_per_acre',
 
-            # ✅ frontend names
+            
             'flow_rate_liter_per_hour',
             'emitters_per_plant',
 
@@ -526,60 +568,6 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
             'emitters_count',
             'distance_motor_to_plot_m',
         ]
-class FarmBaseCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Farm
-        fields = [
-            'address',
-            'area_size',
-            'soil_type',
-            'plot',
-            'crop_type',
-            'plantation_date',
-        ]
-class GrapeFarmCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Farm
-        fields = [
-            'address',
-            'area_size',
-            'soil_type',
-            'plot',
-            'crop_type',
-            'crop_variety',
-            'spacing_a',
-            'spacing_b',
-            'plantation_date',
-            'variety_type',
-            'variety_subtype',
-            'variety_timing',
-            'plant_age',
-            'foundation_pruning_date',
-            'fruit_pruning_date',
-            'last_harvesting_date',
-            'resting_period_days',
-        ]
-
-class SugarcaneFarmCreateSerializer(FarmBaseCreateSerializer):
-    class Meta(FarmBaseCreateSerializer.Meta):
-        fields = FarmBaseCreateSerializer.Meta.fields + [
-            'row_spacing',
-            'plant_spacing',
-            'flow_rate_lph',
-            'emitters_count',
-        ]
-
-
-    def create(self, validated_data):
-        request = self.context['request']
-        user = request.user
-
-        validated_data['farm_owner'] = user
-        validated_data['created_by'] = user
-        validated_data['industry'] = user.industry
-
-        return Farm.objects.create(**validated_data)
-
 
 class FarmSerializer(serializers.ModelSerializer):
     farm_owner = UserSerializer(read_only=True)
@@ -607,6 +595,27 @@ class FarmSerializer(serializers.ModelSerializer):
         source='crop_type',
         queryset=CropType.objects.all(),
         write_only=True,
+        required=False,
+        allow_null=True
+    )
+    crop_variety = serializers.CharField(required=False, allow_blank=True)
+    variety_type = serializers.ChoiceField(
+        choices=['pre-season', 'seasonal'],
+        required=False,
+        allow_null=True
+    )
+    variety_subtype = serializers.ChoiceField(
+        choices=['wine', 'table'],
+        required=False,
+        allow_null=True
+    )
+    variety_timing = serializers.ChoiceField(
+        choices=['early', 'late'],
+        required=False,
+        allow_null=True
+    )
+    plant_age = serializers.ChoiceField(
+        choices=['0-2'],
         required=False,
         allow_null=True
     )

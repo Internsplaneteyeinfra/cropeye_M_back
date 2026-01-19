@@ -142,43 +142,4 @@ class User(AbstractUser):
     def phone_number_formatted(self):
         return self.get_phone_number_with_country_code()
 
-    # ==================== Clean & Validate ====================
-    def clean(self):
-        super().clean()
-        if self.phone_number == '' or (isinstance(self.phone_number, str) and not self.phone_number.strip()):
-            self.phone_number = None
-        
-        if self.phone_number:
-            # Remove all non-digit characters
-            cleaned_phone = re.sub(r'\D', '', self.phone_number)
-            # Remove country code if present
-            if cleaned_phone.startswith('91') and len(cleaned_phone) == 12:
-                cleaned_phone = cleaned_phone[2:]
-            # Must be exactly 10 digits
-            if len(cleaned_phone) != 10:
-                from django.core.exceptions import ValidationError
-                raise ValidationError({'phone_number': 'Phone number must be exactly 10 digits (or 12 digits with +91).'})
-            self.phone_number = cleaned_phone
-
-    # ==================== Save Method ====================
-    def save(self, *args, **kwargs):
-        if self.phone_number == '' or (isinstance(self.phone_number, str) and not self.phone_number.strip()):
-            self.phone_number = None
-        
-        if self.phone_number:
-            cleaned_phone = re.sub(r'\D', '', self.phone_number)
-            if cleaned_phone.startswith('91') and len(cleaned_phone) == 12:
-                cleaned_phone = cleaned_phone[2:]
-            self.phone_number = cleaned_phone
-
-        # Only validate all fields when doing a full save, not partial updates
-        # This prevents errors when Django updates only specific fields like 'last_login'
-        # When update_fields is specified, Django only updates those fields and skips validation
-        update_fields = kwargs.get('update_fields')
-        if update_fields is None:
-            # Full save - validate all fields
-            self.full_clean()
-        # For partial updates, skip full_clean() to allow Django to update specific fields
-        # without validating fields that aren't being updated
-        
-        super().save(*args, **kwargs)
+    

@@ -297,11 +297,19 @@ class Plot(models.Model):
     updated_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ('gat_number', 'plot_number', 'village', 'taluka', 'district')
-        indexes = [
-            models.Index(fields=['gat_number', 'plot_number']),
-        ]
+        constraints = [
+            # Global uniqueness
+            models.UniqueConstraint(
+                fields=['gat_number', 'plot_number', 'village', 'taluka', 'district'],
+                name='unique_plot_global'
+            ),
 
+            # Farmer-level uniqueness
+            models.UniqueConstraint(
+                fields=['farmer', 'gat_number', 'plot_number', 'village'],
+                name='unique_plot_per_farmer'
+            ),
+        ]
     def __str__(self):
         return f"Gat {self.gat_number} / Plot {self.plot_number or 'N/A'} – {self.village or 'Unknown'}"
 
@@ -641,6 +649,9 @@ class Farm(models.Model):
             self.plant_spacing = None
             self.flow_rate_liter_per_hour = None
             self.emitters_per_plant = None
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
         super().clean()
 
 

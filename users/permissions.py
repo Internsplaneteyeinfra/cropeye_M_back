@@ -178,3 +178,21 @@ class MultiTenantPermission(permissions.BasePermission):
                 return obj.industry == user_industry
             # For objects without industry field, allow access
             return True
+class UserCreateOrOwnerPermission(permissions.BasePermission):
+    """
+    - Allow anyone to create a user (POST /users/)
+    - Allow the user themselves or superuser to GET, PUT, PATCH, DELETE
+    """
+    def has_permission(self, request, view):
+        # Allow anyone to POST (create)
+        if request.method == 'POST':
+            return True
+        # For other methods, must be authenticated
+        return request.user and request.user.is_authenticated
+
+    def has_object_permission(self, request, view, obj):
+        # Superuser can do anything
+        if request.user.is_superuser:
+            return True
+        # Users can only access their own object
+        return obj == request.user

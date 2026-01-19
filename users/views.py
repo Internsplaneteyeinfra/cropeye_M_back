@@ -2,10 +2,12 @@ from rest_framework import viewsets, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
+from rest_framework.views import APIView
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
+from .permissions import UserCreateOrOwnerPermission
 import random
 import string
 from .models import Role, Industry
@@ -135,7 +137,7 @@ class SimpleUserViewSet(viewsets.ModelViewSet):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [UserCreateOrOwnerPermission]
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -1645,3 +1647,11 @@ class UserViewSet(viewsets.ModelViewSet):
                     'vendors_count': vendors_count,
                 }
             })
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = UserSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_201_CREATED)

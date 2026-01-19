@@ -18,10 +18,10 @@ from .views import (
     get_crop_type_choices,
 )
 
-# Create router
+# Create a DRF router
 router = DefaultRouter()
 
-# Register all viewsets
+# Register all ViewSets with the router
 router.register('soil-types',       SoilTypeViewSet,        basename='soiltype')
 router.register('crop-types',       CropTypeViewSet,        basename='croptype')
 router.register('plantation-types', PlantationTypeViewSet,  basename='plantationtype')
@@ -38,7 +38,7 @@ urlpatterns = [
     # Include router URLs (CRUD + custom @action endpoints)
     path('', include(router.urls)),
 
-    # Additional endpoints (function-based)
+    # Function-based endpoints
     path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
     path('crop-type-choices/', get_crop_type_choices, name='crop-type-choices'),
 ]

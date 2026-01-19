@@ -102,6 +102,22 @@ class UserSerializer(serializers.ModelSerializer):
             'role', 'industry', 'created_by', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
+    def get_role(self, obj):
+        if obj.role:
+            return {
+                'id': obj.role.id,
+                'name': obj.role.name
+            }
+        return None
+
+    # Return industry info
+    def get_industry(self, obj):
+        if obj.industry:
+            return {
+                'id': obj.industry.id,
+                'name': obj.industry.name
+            }
+        return None
 
 class FarmerDetailSerializer(UserSerializer):
     """Enhanced serializer for farmers with irrigation and plantation details"""
@@ -522,240 +538,83 @@ class UserCreateSerializer(serializers.ModelSerializer):
         return None
     
     def create(self, validated_data):
-        # Get role_id from validated_data first
-        role_id = validated_data.pop('role_id', None)
-        password = validated_data.pop('password')
-        
-        # Log for debugging
         import logging
+        from rest_framework import serializers
+        from .models import User, Role
+
         logger = logging.getLogger(__name__)
-        logger.info(f"Creating user - role_id from validated_data: {role_id}")
-        
-        # CRITICAL FIX: If role_id is None in validated_data, check the raw request data
-        # This ensures we capture role_id even if it didn't make it through validation
-        if role_id is None or role_id == '' or role_id == 0:
-            request = self.context.get('request')
-            if request and hasattr(request, 'data'):
-                request_data = request.data
-                # Try different possible field names that frontend might use
-                raw_role_id = request_data.get('role_id') or request_data.get('roleId') or request_data.get('role')
-                
-                # Also check if it's nested in an object
-                if raw_role_id is None:
-                    if isinstance(request_data, dict):
-                        # Check if role_id is nested
-                        if 'user' in request_data and isinstance(request_data['user'], dict):
-                            raw_role_id = request_data['user'].get('role_id') or request_data['user'].get('roleId')
-                        elif 'data' in request_data and isinstance(request_data['data'], dict):
-                            raw_role_id = request_data['data'].get('role_id') or request_data['data'].get('roleId')
-                
-                if raw_role_id is not None and raw_role_id != '' and raw_role_id != 0 and raw_role_id != '0':
-                    logger.info(f"Found role_id in raw request data: {raw_role_id} (type: {type(raw_role_id)})")
-                    # Check if it's a role name and convert it
-                    role_name_mapping = {
-                        'farmer': 1,
-                        'fieldofficer': 2,
-                        'field_officer': 2,
-                        'field-officer': 2,
-                        'manager': 3,
-                        'owner': 4
-                    }
-                    if isinstance(raw_role_id, str):
-                        raw_role_id_lower = raw_role_id.strip().lower()
-                        if raw_role_id_lower in role_name_mapping:
-                            raw_role_id = role_name_mapping[raw_role_id_lower]
-                            logger.info(f"Converted role name '{raw_role_id_lower}' to role ID: {raw_role_id}")
-                    role_id = raw_role_id
-        
-        # Validate and convert role_id to integer if provided
-        if role_id is not None and role_id != '' and role_id != 0 and role_id != '0':
-            # Ensure role_id is an integer - handle both string and integer inputs
-            if not isinstance(role_id, int):
-                try:
-                    # Handle string inputs - check if it's a role name first
-                    if isinstance(role_id, str):
-                        role_id = role_id.strip()
-                        if role_id.lower() in ['null', 'undefined', 'none', '']:
-                            role_id = None
-                        else:
-                            # Check if it's a role name
-                            role_name_mapping = {
-                                'farmer': 1,
-                                'fieldofficer': 2,
-                                'field_officer': 2,
-                                'field-officer': 2,
-                                'manager': 3,
-                                'owner': 4
-                            }
-                            role_id_lower = role_id.lower()
-                            if role_id_lower in role_name_mapping:
-                                role_id = role_name_mapping[role_id_lower]
-                                logger.info(f"Converted role name '{role_id_lower}' to role ID: {role_id}")
-                            else:
-                                # Not a role name, try to convert to integer (might be "1", "2", etc.)
-                                role_id = int(role_id)
-                    else:
-                        role_id = int(role_id)
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Invalid role_id type: {type(role_id)}, value: {repr(role_id)}, error: {e}")
-                    raise serializers.ValidationError({
-                        'role_id': f'Invalid role_id format. Received: "{role_id}" (type: {type(role_id).__name__}). Must be a valid integer (1, 2, 3, or 4) or role name (farmer, fieldofficer, manager, owner).'
-                    })
-            
-            # Only validate if role_id is still not None after conversion
-            if role_id is not None:
-                # Verify the role exists
-                try:
-                    role = Role.objects.get(id=role_id)
-                    logger.info(f"Using provided role_id: {role_id} ({role.name} - {role.display_name})")
-                except Role.DoesNotExist:
-                    logger.error(f"Role with ID {role_id} does not exist in database")
-                    raise serializers.ValidationError({
-                        'role_id': f'Role with ID {role_id} does not exist. Valid role IDs: 1 (Farmer), 2 (Field Officer), 3 (Manager), 4 (Owner).'
-                    })
-        else:
-            # Auto-determine role_id based on creator ONLY if not provided
-            # If role_id is None, empty, or 0, then auto-determine
-            request_user = self.context['request'].user
-            logger.info(f"Auto-determining role_id for creator: {request_user.username}, role: {request_user.role.name if request_user.role else None}")
-            
-            if request_user.has_role('manager'):
-                # Manager creates field officer by default
-                role_id = 2  # fieldofficer
-                logger.info(f"Auto-determined role_id: {role_id} (fieldofficer) for manager")
-            elif request_user.has_role('fieldofficer'):
-                # Field officer creates farmer by default
-                role_id = 1  # farmer
-                logger.info(f"Auto-determined role_id: {role_id} (farmer) for field officer")
+
+        # --- Extract password ---
+        password = validated_data.pop('password', None)
+        validated_data.pop('password_confirmation', None)  # remove confirmation
+        if not password:
+            raise serializers.ValidationError({"password": "Password is required."})
+
+        # --- Extract and process role ---
+        role_id = validated_data.pop('role', None)
+        request = self.context.get('request')
+        creator = request.user if request else None
+
+        # Auto-assign role if missing
+        if not role_id and creator:
+            if hasattr(creator, 'role') and creator.role.name.lower() == 'manager':
+                role = Role.objects.get(name__iexact='Field Officer')
+            elif hasattr(creator, 'role') and creator.role.name.lower() == 'fieldofficer':
+                role = Role.objects.get(name__iexact='Farmer')
             else:
-                # Owner/superuser must specify role_id
-                logger.error(f"role_id is required for creator: {request_user.username}")
-                raise serializers.ValidationError({
-                    'role_id': 'This field is required. Please specify the role for the user you want to create.'
-                })
-        
-        # Remove any industry_id if it somehow got through (shouldn't be in fields, but safety check)
-        validated_data.pop('industry_id', None)
-        
-        # CRITICAL: Ensure industry is always set from creator
-        # Industry should be set by view in validated_data, but ensure it's there
-        if 'industry' not in validated_data or validated_data.get('industry') is None:
-            creator = self.context['request'].user
-            if creator and creator.industry:
+                role = None
+        elif role_id:
+            # If role is provided as id or name
+            if isinstance(role_id, int):
+                role = Role.objects.filter(id=role_id).first()
+            else:
+                role = Role.objects.filter(name__iexact=str(role_id)).first()
+        else:
+            role = None
+
+        if not role:
+            raise serializers.ValidationError({"role": "Valid role is required."})
+
+        # --- Ensure industry is set ---
+        if 'industry' not in validated_data or validated_data['industry'] is None:
+            if creator and hasattr(creator, 'industry') and creator.industry:
                 validated_data['industry'] = creator.industry
             else:
-                # Log error if industry is missing
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(
-                    f"User creation attempted without industry assignment. "
-                    f"Creator: {creator.username if creator else 'None'}, "
-                    f"Creator Industry: {creator.industry.name if creator and creator.industry else 'None'}"
-                )
                 raise serializers.ValidationError({
-                    'industry': 'Industry assignment failed. Creator must have an industry assigned. Please contact administrator.'
+                    'industry': 'Industry must be provided or inherited from creator.'
                 })
-        
-        # Auto-generate username if not provided
-        if 'username' not in validated_data or not validated_data.get('username'):
-            # Generate username from phone_number or email
+
+        # --- Auto-generate username if missing ---
+        if not validated_data.get('username'):
             if validated_data.get('phone_number'):
                 validated_data['username'] = f"user_{validated_data['phone_number']}"
             elif validated_data.get('email'):
                 validated_data['username'] = validated_data['email'].split('@')[0]
             else:
                 validated_data['username'] = f"user_{User.objects.count() + 1}"
-        
-        # Get the role
-        try:
-            role = Role.objects.get(id=role_id)
-        except Role.DoesNotExist:
-            raise serializers.ValidationError(f"Role with ID {role_id} does not exist")
-        
-        # Set created_by to the current user (manager)
-        creator = self.context['request'].user
-        
-        # CRITICAL: Ensure industry is always set from creator
-        # Industry should be set by view in validated_data, but ensure it's there
-        if 'industry' not in validated_data or validated_data.get('industry') is None:
-            # Try to get industry from creator
-            if creator and creator.industry:
-                validated_data['industry'] = creator.industry
-            else:
-                # Log error if industry is missing
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(
-                    f"User creation attempted without industry assignment. "
-                    f"Creator: {creator.username if creator else 'None'}, "
-                    f"Creator Industry: {creator.industry.name if creator and creator.industry else 'None'}, "
-                    f"Role: {role.name}"
-                )
-                raise serializers.ValidationError({
-                    'industry': 'Industry assignment failed. Creator must have an industry assigned. Please contact administrator.'
-                })
-        
-        # Ensure industry is an Industry instance (not None)
-        if validated_data.get('industry') is None:
-            raise serializers.ValidationError({
-                'industry': 'Industry is required. Please ensure the creator has an industry assigned.'
-            })
-        
-        # Log for debugging
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(
-            f"Creating user with industry: {validated_data.get('industry').name if validated_data.get('industry') else 'None'}, "
-            f"Creator: {creator.username if creator else 'None'}, "
-            f"Role: {role.name}"
-        )
-        
+
+        # --- CREATE USER using create_user ---
         user = User.objects.create_user(
             **validated_data,
+            password=password,
             role=role,
             created_by=creator
         )
-        user.set_password(password)
-        user.save()
-        
-        # CRITICAL: Verify both role and industry were saved correctly
-        user.refresh_from_db()
-        
-        # Verify role was saved
-        if user.role:
-            logger.info(f"✅ User {user.username} created successfully with role: {user.role.name} (ID: {user.role.id})")
-        else:
-            logger.error(f"❌ CRITICAL: User {user.username} was created but role is None! Expected role: {role.name} (ID: {role.id})")
-            # Try to fix it
-            user.role = role
-            user.save(update_fields=['role'])
-            logger.warning(f"⚠️ Fixed role for user {user.username} - set to {role.name} (ID: {role.id})")
-        
-        # Verify industry was saved
-        if user.industry:
-            logger.info(f"✅ User {user.username} created successfully with industry: {user.industry.name} (ID: {user.industry.id})")
-        else:
-            logger.error(f"❌ CRITICAL: User {user.username} was created but industry is None!")
-            # Try to fix it
-            if creator and creator.industry:
-                user.industry = creator.industry
-                user.save(update_fields=['industry'])
-                logger.warning(f"⚠️ Fixed industry for user {user.username} - set to {creator.industry.name}")
-        
-        # Final verification - log if anything is missing
-        if not user.role or not user.industry:
-            logger.error(
-                f"❌ CRITICAL ERROR: User {user.username} (ID: {user.id}) was created but is missing: "
-                f"role={user.role is None} (expected: {role.name}), industry={user.industry is None}"
-            )
-        else:
-            logger.info(
-                f"✅ User {user.username} (ID: {user.id}) created successfully: "
-                f"Role={user.role.name} (ID: {user.role.id}), Industry={user.industry.name} (ID: {user.industry.id})"
-            )
-        
+
+        logger.info(f"User {user.username} created successfully with role {role.name} and industry {user.industry.name}")
         return user
 
+
+    def validate(self, data):
+        password = data.get('password')
+        password_confirmation = data.get('password_confirmation')
+        
+        if not password:
+            raise serializers.ValidationError({"password": "This field cannot be blank."})
+        if password != password_confirmation:
+            raise serializers.ValidationError({"password_confirmation": "Passwords must match."})
+        
+        return data
 class UserUpdateSerializer(serializers.ModelSerializer):
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(),
