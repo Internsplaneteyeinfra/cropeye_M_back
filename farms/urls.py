@@ -16,6 +16,7 @@ from .views import (
     IrrigationTypeViewSet,
     get_crop_fields_config,
     get_crop_type_choices,
+    CompleteFarmerRegistrationAPIView,  # Add the new view
 )
 
 # Create a DRF router
@@ -38,7 +39,10 @@ urlpatterns = [
     # Include router URLs (CRUD + custom @action endpoints)
     path('', include(router.urls)),
 
-    # Function-based endpoints
+    # Function-based or APIView endpoints
     path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
     path('crop-type-choices/', get_crop_type_choices, name='crop-type-choices'),
+
+    # Farmer registration endpoint WITHOUT authentication
+    path('register/farmer/', CompleteFarmerRegistrationAPIView.as_view(), name='farmer-register'),
 ]

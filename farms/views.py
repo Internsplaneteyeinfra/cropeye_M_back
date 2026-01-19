@@ -9,6 +9,10 @@ from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 from rest_framework.exceptions import ValidationError
 from rest_framework import status
+from farms.services import CompleteFarmerRegistrationService
+from rest_framework.permissions import AllowAny
+from rest_framework.views import APIView  
+
 
 from users.multi_tenant_utils import filter_by_industry, get_user_industry
 from .models import (
@@ -294,7 +298,34 @@ class FarmViewSet(viewsets.ModelViewSet):
         if user.has_role('fieldofficer') and not self.request.data.get('farm_owner'):
             raise ValidationError("Field Officer must specify farm_owner.")
         serializer.save()
+    @action(
+        detail=False,
+        methods=['post'],
+        url_path='complete-registration',
+        permission_classes=[AllowAny]  # makes this endpoint public
+    )
 
+    def complete_registration(self, request):
+        try:
+            result = CompleteFarmerRegistrationService.create_all(
+                request.data,
+                created_by=None
+            )
+            return Response({
+                "success": True,
+                "message": "Farmer registration completed",
+                "data": {
+                    "farmer_id": result["farmer"].id,
+                    "farm_id": result["farm"].id,
+                    "plot_id": result["plot"].id,
+                    "irrigation_id": result["irrigation"].id if result["irrigation"] else None
+                }
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
     @action(detail=False, methods=['get'])
     def geojson(self, request):
         queryset = self.filter_queryset(self.get_queryset())
@@ -472,8 +503,7 @@ class FarmViewSet(viewsets.ModelViewSet):
         # Unauthenticated users are allowed (new farmer self-registration)
 
         try:
-            from .farmer_registration_service import CompleteFarmerRegistrationService
-
+          
             # Determine if this is self-registration or field officer registration
             farmer_data = request.data.get('farmer', {})
 
@@ -1499,3 +1529,27 @@ def get_crop_type_choices(request):
         'planting_method_choices': planting_method_choices,
         'has_planting_method': len(planting_method_choices) > 0
     })
+class CompleteFarmerRegistrationAPIView(APIView):
+    # This is the key part
+    permission_classes = [AllowAny]          
+    authentication_classes = []              
+
+    def post(self, request, *args, **kwargs):
+        data = request.data
+        try:
+            result = CompleteFarmerRegistrationService.create_all(data)
+            return Response({
+                "success": True,
+                "message": "Farmer registration completed",
+                "data": {
+                    "farmer_id": result["farmer"].id,
+                    "farm_id": result["farm"].id,
+                    "plot_id": result["plot"].id,
+                    "irrigation_id": result["irrigation"].id if result["irrigation"] else None
+                }
+            }, status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
