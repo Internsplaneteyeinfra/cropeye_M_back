@@ -637,33 +637,23 @@ class FarmSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'farm_uid',
-
             'industry',
-
             'farm_owner',
             'farm_owner_id',
             'created_by',
-
             'plot',
             'plot_id',
-
             'address',
             'area_size',
-
             'soil_type',
             'soil_type_id',
-
             'crop_type',
             'crop_type_id',
-
             'farm_document',
             'plantation_date',
-
             'spacing_a',
             'spacing_b',
             'crop_variety',
-
-            # Grapes specific (auto-cleaned by model.clean)
             'variety_type',
             'variety_subtype',
             'variety_timing',
@@ -672,14 +662,10 @@ class FarmSerializer(serializers.ModelSerializer):
             'fruit_pruning_date',
             'last_harvesting_date',
             'resting_period_days',
-
             'row_spacing',
             'plant_spacing',
-            'flow_rate_lph',
-            'emitters_count',
             'irrigations',
             'plants_in_field',
-
             'created_at',
             'updated_at',
         ]
@@ -690,7 +676,6 @@ class FarmSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-
     def create(self, validated_data):
         request = self.context['request']
         user = request.user
