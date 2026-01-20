@@ -344,7 +344,35 @@ class FarmViewSet(viewsets.ModelViewSet):
             )
             
             # Build response with all created entities
-            plots_data = [{"plot_id": p.id, "gat_number": p.gat_number} for p in result.get("plots", [])]
+            def serialize_plot(p):
+                plot_dict = {
+                    "plot_id": p.id,
+                    "gat_number": p.gat_number,
+                    "plot_number": p.plot_number,
+                    "village": p.village,
+                    "taluka": p.taluka,
+                    "district": p.district,
+                    "state": p.state,
+                    "country": p.country,
+                    "pin_code": p.pin_code,
+                    "location": None,
+                    "boundary": None
+                }
+                # Serialize location (Point)
+                if p.location:
+                    plot_dict["location"] = {
+                        "type": "Point",
+                        "coordinates": [p.location.x, p.location.y]
+                    }
+                # Serialize boundary (Polygon)
+                if p.boundary:
+                    plot_dict["boundary"] = {
+                        "type": "Polygon",
+                        "coordinates": [list(p.boundary.coords[0])]
+                    }
+                return plot_dict
+            
+            plots_data = [serialize_plot(p) for p in result.get("plots", [])]
             farms_data = [{"farm_id": f.id, "farm_uid": str(f.farm_uid)} for f in result.get("farms", [])]
             irrigations_data = [{"irrigation_id": i.id} for i in result.get("irrigations", []) if i]
             
@@ -1580,14 +1608,53 @@ class CompleteFarmerRegistrationAPIView(APIView):
         data = request.data
         try:
             result = CompleteFarmerRegistrationService.create_all(data)
+            
+            # Build response with all created entities including boundary
+            def serialize_plot(p):
+                plot_dict = {
+                    "plot_id": p.id,
+                    "gat_number": p.gat_number,
+                    "plot_number": p.plot_number,
+                    "village": p.village,
+                    "taluka": p.taluka,
+                    "district": p.district,
+                    "state": p.state,
+                    "country": p.country,
+                    "pin_code": p.pin_code,
+                    "location": None,
+                    "boundary": None
+                }
+                # Serialize location (Point)
+                if p.location:
+                    plot_dict["location"] = {
+                        "type": "Point",
+                        "coordinates": [p.location.x, p.location.y]
+                    }
+                # Serialize boundary (Polygon)
+                if p.boundary:
+                    plot_dict["boundary"] = {
+                        "type": "Polygon",
+                        "coordinates": [list(p.boundary.coords[0])]
+                    }
+                return plot_dict
+            
+            plots_data = [serialize_plot(p) for p in result.get("plots", [])]
+            farms_data = [{"farm_id": f.id, "farm_uid": str(f.farm_uid)} for f in result.get("farms", [])]
+            irrigations_data = [{"irrigation_id": i.id} for i in result.get("irrigations", []) if i]
+            
             return Response({
                 "success": True,
-                "message": "Farmer registration completed",
+                "message": f"Farmer registration completed with {len(plots_data)} plot(s)",
                 "data": {
                     "farmer_id": result["farmer"].id,
-                    "farm_id": result["farm"].id,
-                    "plot_id": result["plot"].id,
-                    "irrigation_id": result["irrigation"].id if result["irrigation"] else None
+                    "farmer_username": result["farmer"].username,
+                    "plots": plots_data,
+                    "farms": farms_data,
+                    "irrigations": irrigations_data,
+                    # Backward compatibility
+                    "plot_id": result["plot"].id if result.get("plot") else None,
+                    "farm_id": result["farm"].id if result.get("farm") else None,
+                    "irrigation_id": result["irrigation"].id if result.get("irrigation") else None
                 }
             }, status=status.HTTP_201_CREATED)
         except Exception as e:

@@ -198,12 +198,78 @@ class CompleteFarmerRegistrationService:
             farm_data = plot_entry.get("farm", {})
             irrigation_data = plot_entry.get("irrigation")
             
+            logger.info(f"Processing plot_entry: {plot_entry}")
+            logger.info(f"Extracted plot_data: {plot_data}")
+            logger.info(f"plot_data has 'boundary' key: {'boundary' in plot_data}")
+            
             # Create Plot
+            from django.contrib.gis.geos import Polygon
+            
             location = None
+            boundary = None
+            
+            # Handle point location (center point)
             if "location" in plot_data and plot_data["location"]:
                 loc = plot_data["location"]
                 location = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
+                logger.info(f"Created location Point: {location}")
+            
+            # Handle boundary polygon coordinates
+            if "boundary" in plot_data and plot_data["boundary"]:
+                boundary_data = plot_data["boundary"]
+                logger.info(f"Received boundary data: {boundary_data}")
+                logger.info(f"Boundary data type: {type(boundary_data)}")
+                
+                # Support multiple formats:
+                # 1. GeoJSON format: {"type": "Polygon", "coordinates": [[[lon, lat], [lon, lat], ...]]}
+                # 2. Simple array: [[lon, lat], [lon, lat], ...]
+                # 3. Array of objects: [{"lon": x, "lat": y}, {"lon": x, "lat": y}, ...]
+                
+                coords = None
+                if isinstance(boundary_data, dict) and "coordinates" in boundary_data:
+                    # GeoJSON format
+                    coords = boundary_data["coordinates"]
+                    logger.info(f"GeoJSON format detected, coordinates: {coords}")
+                    if coords and isinstance(coords[0], list) and len(coords[0]) > 0 and isinstance(coords[0][0], list):
+                        # Nested array [[coords]]
+                        coords = coords[0]
+                        logger.info(f"Unwrapped nested coordinates: {coords}")
+                elif isinstance(boundary_data, list):
+                    coords = boundary_data
+                    logger.info(f"Simple array format detected: {coords}")
+                
+                if coords:
+                    # Convert to list of tuples (lon, lat)
+                    polygon_coords = []
+                    for coord in coords:
+                        if isinstance(coord, dict):
+                            # {"lon": x, "lat": y} format
+                            polygon_coords.append((float(coord.get("lon", 0.0)), float(coord.get("lat", 0.0))))
+                        elif isinstance(coord, (list, tuple)) and len(coord) >= 2:
+                            # [lon, lat] format
+                            polygon_coords.append((float(coord[0]), float(coord[1])))
+                    
+                    logger.info(f"Parsed polygon_coords: {polygon_coords}")
+                    
+                    # Ensure polygon is closed (first point == last point)
+                    if polygon_coords and polygon_coords[0] != polygon_coords[-1]:
+                        polygon_coords.append(polygon_coords[0])
+                        logger.info(f"Closed polygon_coords: {polygon_coords}")
+                    
+                    # Need at least 4 points for a valid polygon (3 vertices + closing point)
+                    if len(polygon_coords) >= 4:
+                        try:
+                            boundary = Polygon(polygon_coords)
+                            logger.info(f"Created Polygon boundary: {boundary}")
+                        except Exception as e:
+                            logger.error(f"Failed to create Polygon: {e}")
+                    else:
+                        logger.warning(f"Not enough points for polygon: {len(polygon_coords)} (need at least 4)")
+            else:
+                logger.info(f"No boundary data in plot_data. Keys: {plot_data.keys()}")
 
+            logger.info(f"Creating Plot with location={location}, boundary={boundary}")
+            
             plot = Plot.objects.create(
                 gat_number=plot_data.get("gat_number"),
                 plot_number=plot_data.get("plot_number"),
@@ -214,9 +280,15 @@ class CompleteFarmerRegistrationService:
                 country=plot_data.get("country", "India"),
                 pin_code=plot_data.get("pin_code"),
                 location=location,
+                boundary=boundary,
                 farmer=farmer,
                 created_by=created_by
             )
+            
+            # Verify what was stored
+            plot.refresh_from_db()
+            logger.info(f"Plot created with id={plot.id}, stored boundary={plot.boundary}")
+            
             created_plots.append(plot)
 
             # Create Farm for this plot
