@@ -213,8 +213,18 @@ class FarmViewSet(viewsets.ModelViewSet):
 
 
     def get_permissions(self):
-            # Allow farmers to perform all operations (create, read, update, delete)
+            # Allow complete-registration endpoint to be public (no auth required)
+            if getattr(self, 'action', None) == 'complete_registration':
+                return [AllowAny()]
+            # All other actions require authentication
             return [permissions.IsAuthenticated()]
+    
+    def get_authenticators(self):
+            # Disable authentication for complete-registration endpoint
+            # Check the URL path since self.action may not be set yet
+            if hasattr(self, 'request') and self.request and 'complete-registration' in self.request.path:
+                return []
+            return super().get_authenticators()
     def get_queryset(self):
         """
         Return farms based on the logged-in user's role:
@@ -302,23 +312,55 @@ class FarmViewSet(viewsets.ModelViewSet):
         detail=False,
         methods=['post'],
         url_path='complete-registration',
-        permission_classes=[AllowAny]  # makes this endpoint public
+        permission_classes=[AllowAny],  # makes this endpoint public
+        authentication_classes=[]  # no authentication required
     )
-
     def complete_registration(self, request):
+        """
+        Complete farmer registration - creates farmer, plots, farms, and irrigations.
+        
+        Supports two formats:
+        1. Single plot:
+           {
+             "farmer": {...},
+             "plot": {...},
+             "farm": {...},
+             "irrigation": {...}
+           }
+        
+        2. Multiple plots:
+           {
+             "farmer": {...},
+             "plots": [
+               {"plot": {...}, "farm": {...}, "irrigation": {...}},
+               {"plot": {...}, "farm": {...}, "irrigation": {...}}
+             ]
+           }
+        """
         try:
             result = CompleteFarmerRegistrationService.create_all(
                 request.data,
                 created_by=None
             )
+            
+            # Build response with all created entities
+            plots_data = [{"plot_id": p.id, "gat_number": p.gat_number} for p in result.get("plots", [])]
+            farms_data = [{"farm_id": f.id, "farm_uid": str(f.farm_uid)} for f in result.get("farms", [])]
+            irrigations_data = [{"irrigation_id": i.id} for i in result.get("irrigations", []) if i]
+            
             return Response({
                 "success": True,
-                "message": "Farmer registration completed",
+                "message": f"Farmer registration completed with {len(plots_data)} plot(s)",
                 "data": {
                     "farmer_id": result["farmer"].id,
-                    "farm_id": result["farm"].id,
-                    "plot_id": result["plot"].id,
-                    "irrigation_id": result["irrigation"].id if result["irrigation"] else None
+                    "farmer_username": result["farmer"].username,
+                    "plots": plots_data,
+                    "farms": farms_data,
+                    "irrigations": irrigations_data,
+                    # Backward compatibility
+                    "plot_id": result["plot"].id if result.get("plot") else None,
+                    "farm_id": result["farm"].id if result.get("farm") else None,
+                    "irrigation_id": result["irrigation"].id if result.get("irrigation") else None
                 }
             }, status=status.HTTP_201_CREATED)
         except Exception as e:

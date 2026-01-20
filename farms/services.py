@@ -121,81 +121,182 @@ class CompleteFarmerRegistrationService:
     @staticmethod
     @transaction.atomic
     def create_all(data: dict, created_by=None) -> dict:
-        # 1. Create Farmer/User
+        """
+        Create farmer with multiple plots, farms, and irrigations.
+        
+        Supports two formats:
+        1. Single plot (backward compatible):
+           {
+             "farmer": {...},
+             "plot": {...},
+             "farm": {...},
+             "irrigation": {...}
+           }
+        
+        2. Multiple plots:
+           {
+             "farmer": {...},
+             "plots": [
+               {
+                 "plot": {...},
+                 "farm": {...},
+                 "irrigation": {...}
+               },
+               ...
+             ]
+           }
+        """
+        from users.models import Role
+        
+        # 1. Create Farmer/User with password and farmer role
         farmer_data = data.get("farmer", {})
-        farmer = User.objects.create(
+        
+        # Get or create farmer role (roleid = 1)
+        farmer_role, _ = Role.objects.get_or_create(
+            id=1,
+            defaults={'name': 'farmer', 'display_name': 'Farmer'}
+        )
+        
+        # Create user with password
+        farmer = User.objects.create_user(
             username=farmer_data.get("username"),
             email=farmer_data.get("email"),
+            password=farmer_data.get("password"),  # Set password for login
             first_name=farmer_data.get("first_name", ""),
-            last_name=farmer_data.get("last_name", "")
+            last_name=farmer_data.get("last_name", ""),
+            phone_number=farmer_data.get("phone_number", ""),
+            address=farmer_data.get("address", ""),
+            village=farmer_data.get("village", ""),
+            district=farmer_data.get("district", ""),
+            state=farmer_data.get("state", ""),
+            taluka=farmer_data.get("taluka", ""),
+            role=farmer_role  # Assign farmer role
         )
 
-        # 2. Create Plot
-        plot_data = data.get("plot", {})
-        location = None
-        if "location" in plot_data and plot_data["location"]:
-            loc = plot_data["location"]
-            location = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
+        # Check if using multiple plots format or single plot format
+        plots_data = data.get("plots", [])
+        
+        # If no "plots" array, check for single plot format (backward compatible)
+        if not plots_data:
+            single_plot = data.get("plot")
+            single_farm = data.get("farm")
+            single_irrigation = data.get("irrigation")
+            if single_plot:
+                plots_data = [{
+                    "plot": single_plot,
+                    "farm": single_farm or {},
+                    "irrigation": single_irrigation
+                }]
+        
+        # 2. Create Plots, Farms, and Irrigations
+        created_plots = []
+        created_farms = []
+        created_irrigations = []
+        
+        for plot_entry in plots_data:
+            plot_data = plot_entry.get("plot", {})
+            farm_data = plot_entry.get("farm", {})
+            irrigation_data = plot_entry.get("irrigation")
+            
+            # Create Plot
+            location = None
+            if "location" in plot_data and plot_data["location"]:
+                loc = plot_data["location"]
+                location = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
 
-        plot = Plot.objects.create(
-            gat_number=plot_data.get("gat_number"),
-            plot_number=plot_data.get("plot_number"),
-            village=plot_data.get("village"),
-            taluka=plot_data.get("taluka"),
-            district=plot_data.get("district"),
-            state=plot_data.get("state"),
-            country=plot_data.get("country", "India"),
-            pin_code=plot_data.get("pin_code"),
-            location=location,
-            farmer=farmer,
-            created_by=created_by
-        )
-
-        # 3. Create Farm
-        farm_data = data.get("farm", {})
-        farm = Farm.objects.create(
-            farm_owner=farmer,
-            created_by=created_by,
-            plot=plot,
-            address=farm_data.get("address", ""),
-            area_size=farm_data.get("area_size"),
-            soil_type_id=farm_data.get("soil_type"),
-            crop_type_id=farm_data.get("crop_type"),
-            spacing_a=farm_data.get("spacing_a"),
-            spacing_b=farm_data.get("spacing_b"),
-            plantation_date=farm_data.get("plantation_date"),
-            foundation_pruning_date=farm_data.get("foundation_pruning_date"),
-            fruit_pruning_date=farm_data.get("fruit_pruning_date"),
-            last_harvesting_date=farm_data.get("last_harvesting_date")
-        )
-
-        # 4. Optional: Create Irrigation
-        irrigation_data = data.get("irrigation")
-        irrigation = None
-        if irrigation_data:
-            # Ensure location is a Point
-            loc = irrigation_data.get("location")
-            if isinstance(loc, dict) and "lat" in loc and "lon" in loc:
-                loc_point = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
-            else:
-                loc_point = Point(0.0, 0.0)  # default fallback
-
-            irrigation = FarmIrrigation.objects.create(
-                farm=farm,
-                irrigation_type_id=irrigation_data.get("irrigation_type_id"),
-                status=irrigation_data.get("status", True),
-                motor_horsepower=irrigation_data.get("motor_horsepower"),
-                pipe_width_inches=irrigation_data.get("pipe_width_inches"),
-                distance_motor_to_plot_m=irrigation_data.get("distance_motor_to_plot_m"),
-                plants_per_acre=irrigation_data.get("plants_per_acre"),
-                flow_rate_lph=irrigation_data.get("flow_rate_lph"),
-                emitters_count=irrigation_data.get("emitters_count"),
-                location=loc_point
+            plot = Plot.objects.create(
+                gat_number=plot_data.get("gat_number"),
+                plot_number=plot_data.get("plot_number"),
+                village=plot_data.get("village"),
+                taluka=plot_data.get("taluka"),
+                district=plot_data.get("district"),
+                state=plot_data.get("state"),
+                country=plot_data.get("country", "India"),
+                pin_code=plot_data.get("pin_code"),
+                location=location,
+                farmer=farmer,
+                created_by=created_by
             )
+            created_plots.append(plot)
 
+            # Create Farm for this plot
+            # Handle optional foreign keys - only set if ID exists and is valid
+            from .models import SoilType, CropType, IrrigationType
+            
+            soil_type = None
+            crop_type = None
+            soil_type_id = farm_data.get("soil_type")
+            crop_type_id = farm_data.get("crop_type")
+            
+            if soil_type_id:
+                try:
+                    soil_type = SoilType.objects.get(id=soil_type_id)
+                except SoilType.DoesNotExist:
+                    pass  # Leave as None if not found
+            
+            if crop_type_id:
+                try:
+                    crop_type = CropType.objects.get(id=crop_type_id)
+                except CropType.DoesNotExist:
+                    pass  # Leave as None if not found
+            
+            farm = Farm.objects.create(
+                farm_owner=farmer,
+                created_by=created_by,
+                plot=plot,
+                address=farm_data.get("address", ""),
+                area_size=farm_data.get("area_size"),
+                soil_type=soil_type,
+                crop_type=crop_type,
+                spacing_a=farm_data.get("spacing_a"),
+                spacing_b=farm_data.get("spacing_b"),
+                plantation_date=farm_data.get("plantation_date") or None,
+                foundation_pruning_date=farm_data.get("foundation_pruning_date") or None,
+                fruit_pruning_date=farm_data.get("fruit_pruning_date") or None,
+                last_harvesting_date=farm_data.get("last_harvesting_date") or None
+            )
+            created_farms.append(farm)
+
+            # Create Irrigation for this farm (optional)
+            irrigation = None
+            if irrigation_data:
+                loc = irrigation_data.get("location")
+                if isinstance(loc, dict) and "lat" in loc and "lon" in loc:
+                    loc_point = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
+                else:
+                    loc_point = Point(0.0, 0.0)
+
+                # Handle optional irrigation type
+                irrigation_type = None
+                irrigation_type_id = irrigation_data.get("irrigation_type_id")
+                if irrigation_type_id:
+                    try:
+                        irrigation_type = IrrigationType.objects.get(id=irrigation_type_id)
+                    except IrrigationType.DoesNotExist:
+                        pass  # Leave as None if not found
+
+                irrigation = FarmIrrigation.objects.create(
+                    farm=farm,
+                    irrigation_type=irrigation_type,
+                    status=irrigation_data.get("status", True),
+                    motor_horsepower=irrigation_data.get("motor_horsepower"),
+                    pipe_width_inches=irrigation_data.get("pipe_width_inches"),
+                    distance_motor_to_plot_m=irrigation_data.get("distance_motor_to_plot_m"),
+                    plants_per_acre=irrigation_data.get("plants_per_acre"),
+                    flow_rate_lph=irrigation_data.get("flow_rate_lph"),
+                    emitters_count=irrigation_data.get("emitters_count"),
+                    location=loc_point
+                )
+                created_irrigations.append(irrigation)
+
+        # Return result - backward compatible for single plot, extended for multiple
         return {
             "farmer": farmer,
-            "farm": farm,
-            "plot": plot,
-            "irrigation": irrigation
+            "plots": created_plots,
+            "farms": created_farms,
+            "irrigations": created_irrigations,
+            # Backward compatibility - return first items as singular
+            "plot": created_plots[0] if created_plots else None,
+            "farm": created_farms[0] if created_farms else None,
+            "irrigation": created_irrigations[0] if created_irrigations else None
         }
