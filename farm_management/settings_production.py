@@ -35,6 +35,7 @@ render_domains = [
     'cropeye-server-1.onrender.com',  # Your Render service domain
     'cropeye-server.onrender.com',
     'farm-management-web.onrender.com',
+    'cropeye-m-back.onrender.com',  # New Render deployment domain
 ]
 
 # Add Render domains if not already present

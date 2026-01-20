@@ -187,7 +187,7 @@ field.py
 soil.py
 main.py
 managerDash.py
-Admin.py
+# Admin.py - REMOVED: was incorrectly ignoring Django admin.py files
 agronomist_bot.py
 local_llama_chat.py
 utilsbot.py
@@ -423,10 +423,16 @@ refresh_*.py
 generate_*.py
 monitoring.py
 main.py
-Admin.py
+# Admin.py - REMOVED: was incorrectly ignoring Django admin.py files
 agronomist_bot.py
 local_llama_chat.py
 utilsbot.py
+
+# Keep Django admin.py files (don't ignore them)
+!*/admin.py
+!farms/admin.py
+!users/admin.py
+!tasks/admin.py
 
 # Documentation (keep only essential)
 *.md
