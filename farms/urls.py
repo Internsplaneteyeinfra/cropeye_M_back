@@ -1,8 +1,5 @@
-# farms/urls.py
-
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-
 from .views import (
     SoilTypeViewSet,
     CropTypeViewSet,
@@ -10,39 +7,40 @@ from .views import (
     PlantingMethodViewSet,
     FarmViewSet,
     PlotViewSet,
+    PlotFileViewSet,
     FarmImageViewSet,
     FarmSensorViewSet,
     FarmIrrigationViewSet,
     IrrigationTypeViewSet,
     get_crop_fields_config,
     get_crop_type_choices,
-    CompleteFarmerRegistrationAPIView,  # Add the new view
+    CompleteFarmerRegistrationAPIView,
 )
 
-# Create a DRF router
+# DRF router
 router = DefaultRouter()
 
-# Register all ViewSets with the router
-router.register('soil-types',       SoilTypeViewSet,        basename='soiltype')
-router.register('crop-types',       CropTypeViewSet,        basename='croptype')
-router.register('plantation-types', PlantationTypeViewSet,  basename='plantationtype')
-router.register('planting-methods', PlantingMethodViewSet,  basename='plantingmethod')
-router.register('irrigation-types', IrrigationTypeViewSet,  basename='irrigationtype')
-router.register('farms',            FarmViewSet,            basename='farm')
-router.register('plots',            PlotViewSet,            basename='plot')
-router.register('farm-images',      FarmImageViewSet,       basename='farmimage')
-router.register('farm-sensors',     FarmSensorViewSet,      basename='farmsensor')
-router.register('farm-irrigations', FarmIrrigationViewSet,  basename='farmirrigation')
+# Register all your ViewSets
+router.register('soil-types', SoilTypeViewSet, basename='soiltype')
+router.register('crop-types', CropTypeViewSet, basename='croptype')
+router.register('plantation-types', PlantationTypeViewSet, basename='plantationtype')
+router.register('planting-methods', PlantingMethodViewSet, basename='plantingmethod')
+router.register('irrigation-types', IrrigationTypeViewSet, basename='irrigationtype')
+
+router.register('farms', FarmViewSet, basename='farm')
+router.register('plots', PlotViewSet, basename='plot')
+
+# ✅ Plot files CRUD
+router.register('plot-files', PlotFileViewSet, basename='plotfile')
+
+router.register('farm-images', FarmImageViewSet, basename='farmimage')
+router.register('farm-sensors', FarmSensorViewSet, basename='farmsensor')
+router.register('farm-irrigations', FarmIrrigationViewSet, basename='farmirrigation')
 
 # URL patterns
 urlpatterns = [
-    # Include router URLs (CRUD + custom @action endpoints)
-    path('', include(router.urls)),
-
-    # Function-based or APIView endpoints
+    path('', include(router.urls)),  # All router endpoints
     path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
     path('crop-type-choices/', get_crop_type_choices, name='crop-type-choices'),
-
-    # Farmer registration endpoint WITHOUT authentication
     path('register/farmer/', CompleteFarmerRegistrationAPIView.as_view(), name='farmer-register'),
 ]

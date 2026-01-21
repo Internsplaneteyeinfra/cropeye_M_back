@@ -4,6 +4,7 @@ from rest_framework_gis.fields import GeometryField
 from django.contrib.auth import get_user_model
 import json
 from django.contrib.gis.geos import Point
+from .models import PlotFile
 
 
 from .models import (
@@ -778,3 +779,7 @@ class FarmGeoSerializer(GeoFeatureModelSerializer):
             'created_at',
             'updated_at',
         ]
+class PlotFileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PlotFile
+        fields = '__all__'

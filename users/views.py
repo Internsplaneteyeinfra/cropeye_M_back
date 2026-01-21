@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
 from .permissions import UserCreateOrOwnerPermission
+from rest_framework import generics, status
 import random
 import string
 from .models import Role, Industry

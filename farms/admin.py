@@ -5,6 +5,7 @@ from users.admin import IndustryFilteredAdmin
 from .forms import FarmAdminForm
 from .forms import FarmIrrigationAdminForm
 from .models import Farm, FarmIrrigation
+from .models import PlotFile
 
 from .models import (
     SoilType,
@@ -410,3 +411,9 @@ class FarmIrrigationAdmin(LeafletGeoAdmin):
     def last_harvesting_date_display(self, obj):
         return obj.farm.last_harvesting_date if obj.farm else None
     last_harvesting_date_display.short_description = "Last Harvesting Date"
+
+
+@admin.register(PlotFile)
+class PlotFileAdmin(admin.ModelAdmin):
+    list_display = ('plot', 'file_type', 'uploaded_by', 'uploaded_at')
+    list_filter = ('file_type', 'uploaded_at')

@@ -12,6 +12,9 @@ from rest_framework import status
 from farms.services import CompleteFarmerRegistrationService
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView  
+from rest_framework.permissions import IsAuthenticated
+from .models import PlotFile
+from .serializers import PlotFileSerializer
 
 
 from users.multi_tenant_utils import filter_by_industry, get_user_industry
@@ -1662,3 +1665,9 @@ class CompleteFarmerRegistrationAPIView(APIView):
                 "success": False,
                 "error": str(e)
             }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class PlotFileViewSet(viewsets.ModelViewSet):
+    queryset = PlotFile.objects.all()
+    serializer_class = PlotFileSerializer
+    permission_classes = [] 

@@ -716,3 +716,21 @@ class FarmImage(models.Model):
 
     def __str__(self):
         return f"{self.farm.farm_uid_str()} – {self.title}"
+    
+    
+class PlotFile(models.Model):
+    FILE_TYPE_CHOICES = [
+        ('residue', 'Residue Analysis'),
+        ('variety', 'Variety Identification'),
+        ('soil', 'Soil Report'),
+    ]
+
+    plot        = models.ForeignKey('Plot', on_delete=models.CASCADE, related_name='files')
+    file_type   = models.CharField(max_length=20, choices=FILE_TYPE_CHOICES)
+    file        = models.FileField(upload_to='plot_files/')
+    uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    notes       = models.TextField(blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.plot} – {self.get_file_type_display()} – {self.uploaded_at.date()}"

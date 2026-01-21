@@ -2,6 +2,28 @@ from django.contrib.auth.models import AbstractUser
 from django.db import models
 import re
 from django.core.validators import RegexValidator, EmailValidator
+from django.contrib.auth.models import BaseUserManager
+
+class UserManager(BaseUserManager):
+    use_in_migrations = True
+
+    def _create_user(self, phone_number, email=None, password=None, **extra_fields):
+        if not phone_number:
+            raise ValueError('The phone number must be set')
+        user = self.model(phone_number=phone_number, email=email, **extra_fields)
+        if password:
+            user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_user(self, phone_number, email=None, password=None, **extra_fields):
+        return self._create_user(phone_number=phone_number, email=email, password=password, **extra_fields)
+
+    def create_superuser(self, phone_number, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        return self._create_user(phone_number=phone_number, email=email, password=password, **extra_fields)
+
 
 # ==================== Industry Model ====================
 class Industry(models.Model):
@@ -116,7 +138,7 @@ class User(AbstractUser):
     # ==================== Timestamps ====================
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-
+    objects = UserManager()
     # ==================== User Config ====================
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']

@@ -5,6 +5,8 @@ from django.contrib.auth import authenticate
 import re
 from .models import Role, Industry
 from farms.models import Plot, Farm
+from rest_framework import generics, status
+from rest_framework.response import Response
 
 User = get_user_model()
 
@@ -90,18 +92,40 @@ class IndustrySerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    role = RoleSerializer(read_only=True)
-    industry = IndustrySerializer(read_only=True)
-    created_by = serializers.StringRelatedField(read_only=True)
-    
     class Meta:
         model = User
+        # Exclude username from required fields
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
-            'role', 'industry', 'created_by', 'created_at', 'updated_at'
+            'id', 'phone_number', 'email', 'first_name', 'last_name',
+            'username', 'role', 'industry', 'created_by',
+            'state', 'district', 'taluka', 'village', 'profile_picture'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        extra_kwargs = {
+            'username': {'required': False, 'allow_blank': True, 'allow_null': True},
+        }
+
+    def create(self, validated_data):
+        if not validated_data.get('username'):
+            if validated_data.get('email'):
+                base_username = validated_data['email'].split('@')[0]
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}{counter}"
+                    counter += 1
+                validated_data['username'] = username
+            elif validated_data.get('phone_number'):
+                base_username = f"user_{validated_data['phone_number']}"
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                validated_data['username'] = username
+            else:
+                import uuid
+                validated_data['username'] = f"user_{uuid.uuid4().hex[:8]}"
+        return super().create(validated_data)
     def get_role(self, obj):
         if obj.role:
             return {
@@ -416,6 +440,7 @@ class OwnerHierarchySerializer(serializers.ModelSerializer):
         return User.objects.filter(role__name='farmer').count()
 
 class UserCreateSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(write_only=True)
     # Use CharField to accept both string and integer from frontend, then validate and convert to int
     role_id = serializers.CharField(write_only=True, required=False, allow_blank=True, allow_null=True)
@@ -535,36 +560,47 @@ class UserCreateSerializer(serializers.ModelSerializer):
         # If value is an integer (industry ID from frontend), ignore it - view will set the correct one
         # Return None to ignore frontend values - view will set it after validation
         # Note: The view sets industry in validated_data AFTER validation, so this will be None during validation
+    
         return None
+    def validate(self, data):
+        password = data.get('password')
+        password_confirmation = data.get('password_confirmation')
+        
+        if not password:
+            raise serializers.ValidationError({"password": "This field cannot be blank."})
+        if password != password_confirmation:
+            raise serializers.ValidationError({"password_confirmation": "Passwords must match."})
+        
+        return data
     
     def create(self, validated_data):
         import logging
-        from rest_framework import serializers
         from .models import User, Role
 
         logger = logging.getLogger(__name__)
 
         # --- Extract password ---
         password = validated_data.pop('password', None)
-        validated_data.pop('password_confirmation', None)  # remove confirmation
+        validated_data.pop('password_confirmation', None)
+
         if not password:
             raise serializers.ValidationError({"password": "Password is required."})
 
-        # --- Extract and process role ---
+        # --- Extract role info ---
         role_id = validated_data.pop('role', None)
         request = self.context.get('request')
         creator = request.user if request else None
 
         # Auto-assign role if missing
-        if not role_id and creator:
-            if hasattr(creator, 'role') and creator.role.name.lower() == 'manager':
+        if not role_id and creator and hasattr(creator, 'role'):
+            creator_role = creator.role.name.lower()
+            if creator_role == 'manager':
                 role = Role.objects.get(name__iexact='Field Officer')
-            elif hasattr(creator, 'role') and creator.role.name.lower() == 'fieldofficer':
+            elif creator_role == 'fieldofficer':
                 role = Role.objects.get(name__iexact='Farmer')
             else:
                 role = None
         elif role_id:
-            # If role is provided as id or name
             if isinstance(role_id, int):
                 role = Role.objects.filter(id=role_id).first()
             else:
@@ -584,16 +620,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
                     'industry': 'Industry must be provided or inherited from creator.'
                 })
 
-        # --- Auto-generate username if missing ---
-        if not validated_data.get('username'):
-            if validated_data.get('phone_number'):
-                validated_data['username'] = f"user_{validated_data['phone_number']}"
-            elif validated_data.get('email'):
-                validated_data['username'] = validated_data['email'].split('@')[0]
-            else:
-                validated_data['username'] = f"user_{User.objects.count() + 1}"
-
-        # --- CREATE USER using create_user ---
+        # --- CREATE USER ---
         user = User.objects.create_user(
             **validated_data,
             password=password,
@@ -601,20 +628,10 @@ class UserCreateSerializer(serializers.ModelSerializer):
             created_by=creator
         )
 
-        logger.info(f"User {user.username} created successfully with role {role.name} and industry {user.industry.name}")
+        logger.info(f"User created successfully with role {role.name} and industry {user.industry.name}")
         return user
 
-
-    def validate(self, data):
-        password = data.get('password')
-        password_confirmation = data.get('password_confirmation')
-        
-        if not password:
-            raise serializers.ValidationError({"password": "This field cannot be blank."})
-        if password != password_confirmation:
-            raise serializers.ValidationError({"password_confirmation": "Passwords must match."})
-        
-        return data
+    
 class UserUpdateSerializer(serializers.ModelSerializer):
     role_id = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(),
@@ -830,3 +847,4 @@ class SimpleUserSerializer(serializers.ModelSerializer):
         user.save()
         
         return user
+
