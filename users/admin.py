@@ -7,6 +7,8 @@ from django.http import HttpResponseForbidden
 from django.utils.html import format_html
 from django.urls import reverse
 from .models import Role
+from .forms import CustomUserCreationForm, CustomUserChangeForm
+
 
 User = get_user_model()
 
@@ -204,7 +206,8 @@ class RoleAdmin(admin.ModelAdmin):
 # ==================== User Admin ====================
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-
+    add_form = CustomUserCreationForm
+    form = CustomUserChangeForm
     fieldsets = (
         (None, {'fields': ('phone_number', 'password')}),
         ('Personal info', {'fields': (
@@ -217,17 +220,17 @@ class UserAdmin(DjangoUserAdmin):
     )
 
     add_fieldsets = (
-        (None, {
-            'classes': ('wide',),
-            'fields': (
-                'username', 'phone_number', 'email', 'first_name', 'last_name',
-                'role', 'industry', 'created_by',
-                'password1', 'password2',
-                'state', 'district', 'taluka',
-                'is_active', 'is_staff', 'is_superuser'
-            ),
-        }),
-    )
+    (None, {
+        'classes': ('wide',),
+        'fields': (
+            'phone_number', 'email', 'first_name', 'last_name',
+            'role', 'industry', 'created_by',
+            'password1', 'password2',
+            'state', 'district', 'taluka',
+            'is_active', 'is_staff', 'is_superuser'
+        ),
+    }),
+)
 
     list_display = (
         'phone_number', 'username', 'email', 'role', 'industry', 'get_created_by_email',

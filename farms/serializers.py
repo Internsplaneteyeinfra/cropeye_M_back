@@ -3,6 +3,8 @@ from rest_framework_gis.serializers import GeoFeatureModelSerializer
 from rest_framework_gis.fields import GeometryField
 from django.contrib.auth import get_user_model
 import json
+from django.contrib.gis.geos import Point
+
 
 from .models import (
     SoilType,
@@ -369,12 +371,31 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
+    # 1. Extract crop dates
         crop_dates = {}
-        for field in ['plantation_date', 'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date']:
+        for field in [
+            'plantation_date',
+            'foundation_pruning_date',
+            'fruit_pruning_date',
+            'last_harvesting_date'
+        ]:
             crop_dates[field] = validated_data.pop(field, None)
 
-        instance = super().create(validated_data)
+        # 2. Extract location (THIS IS THE FIX)
+        location = validated_data.pop('location', None)
 
+        if location is None:
+            raise serializers.ValidationError({
+                "location": "Location is required"
+            })
+
+        # 3. Create object with location
+        instance = FarmIrrigation.objects.create(
+            location=location,
+            **validated_data
+        )
+
+        # 4. Save crop dates
         for field, value in crop_dates.items():
             setattr(instance, field, value)
 

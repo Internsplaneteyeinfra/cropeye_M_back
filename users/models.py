@@ -51,9 +51,13 @@ class Role(models.Model):
 class User(AbstractUser):
     # Username for login
     username = models.CharField(
-        max_length=150, unique=True,
-        help_text="Required. Letters, digits and @/./+/-/_ only."
-    )
+    max_length=150,
+    unique=True,
+    blank=True,
+    null=True,
+    help_text="Optional. Letters, digits and @/./+/-/_ only."
+)
+
     
     # Multi-tenant: Role & Industry
     role = models.ForeignKey(
@@ -114,7 +118,7 @@ class User(AbstractUser):
     updated_at = models.DateTimeField(auto_now=True)
 
     # ==================== User Config ====================
-    USERNAME_FIELD = 'username'
+    USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
 
     class Meta:
