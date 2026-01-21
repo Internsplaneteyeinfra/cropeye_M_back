@@ -89,10 +89,8 @@ class CropTypeAdmin(IndustryFilteredAdmin):
             'admin/js/vendor/jquery/jquery.js',
             'admin/js/jquery.init.js',
             'admin/js/actions.js',
-            'admin/js/calendar.js',
-            'admin/js/admin/DateTimeShortcuts.js',
-            'admin/js/croptype_dynamic_fields.js',  # keep your custom JS
         )
+        # Note: Dynamic field JS is now inline in the template (change_form.html)
 
     def get_form(self, request, obj=None, **kwargs):
         form = super().get_form(request, obj, **kwargs)
