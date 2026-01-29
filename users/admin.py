@@ -10,6 +10,8 @@ from .models import Role
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 
+
+
 User = get_user_model()
 
 
@@ -203,53 +205,78 @@ class RoleAdmin(admin.ModelAdmin):
     search_fields = ('name', 'display_name')
 
 
-# ==================== User Admin ====================
+# ==================== User Admin ====================]
+
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
     add_form = CustomUserCreationForm
     form = CustomUserChangeForm
+    model = User
+
+    # Fields displayed in the user edit page (Change view)
     fieldsets = (
         (None, {'fields': ('phone_number', 'password')}),
         ('Personal info', {'fields': (
-            'first_name', 'last_name', 'email', 'username',
-             'state', 'district', 'taluka',
+            'first_name', 'last_name', 'email', 'username', 'address', 'profile_picture'
         )}),
-        ('Role & Permissions', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser')}),
+        ('Location', {'fields': ('state', 'district', 'taluka', 'village')}),
+        ('Role & Permissions', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
         ('Industry & Hierarchy', {'fields': ('industry', 'created_by')}),
+        ('Security', {'fields': ('password_reset_token', 'password_reset_token_created_at')}),
         ('Important dates', {'fields': ('last_login', 'date_joined')}),
     )
 
-    add_fieldsets = (
-    (None, {
-        'classes': ('wide',),
-        'fields': (
-            'phone_number', 'email', 'first_name', 'last_name',
-            'role', 'industry', 'created_by',
-            'password1', 'password2',
-            'state', 'district', 'taluka',
-            'is_active', 'is_staff', 'is_superuser'
-        ),
-    }),
-)
+    # Show all fields in Add User view
+    def get_fieldsets(self, request, obj=None):
+        if not obj:  # Add User view
+            return (
+                (None, {
+                    'classes': ('wide',),
+                    'fields': (
+                        'phone_number', 'email', 'first_name', 'last_name', 'username',
+                        'address', 'profile_picture',
+                        'state', 'district', 'taluka', 'village',
+                        'role', 'industry', 'created_by',
+                        'password1', 'password2',
+                        'is_active', 'is_staff', 'is_superuser',
+                        'groups', 'user_permissions',
+                    ),
+                }),
+            )
+        return self.fieldsets  # Change User view
 
+    # Columns in the user list page
     list_display = (
         'phone_number', 'username', 'email', 'role', 'industry', 'get_created_by_email',
         'state', 'district', 'taluka',
         'is_active', 'is_staff', 'is_superuser', 'date_joined'
     )
 
-    list_filter = ('role', 'industry', 'state', 'district', 'taluka', 'is_active', 'is_staff', 'is_superuser', 'created_by')
-    search_fields = ('phone_number', 'username', 'email', 'first_name', 'last_name', 'created_by__phone_number', 'created_by__email', 'industry__name')
+    # Filters on the list page
+    list_filter = (
+        'role', 'industry', 'state', 'district', 'taluka',
+        'is_active', 'is_staff', 'is_superuser', 'created_by'
+    )
+
+    # Searchable fields
+    search_fields = (
+        'phone_number', 'username', 'email', 'first_name', 'last_name',
+        'created_by__phone_number', 'created_by__email', 'industry__name'
+    )
+
+    # Default ordering
     ordering = ('-date_joined',)
+
+    # Horizontal filters for many-to-many fields
     filter_horizontal = ('groups', 'user_permissions',)
 
+    # Helper to display the email of the user who created this account
     def get_created_by_email(self, obj):
-        if obj.created_by:
-            return obj.created_by.email
-        return "No creator"
+        return obj.created_by.email if obj.created_by else "No creator"
     get_created_by_email.short_description = 'Created By (Email)'
     get_created_by_email.admin_order_field = 'created_by__email'
 
+    # Limit queryset for non-superusers
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         if request.user.is_superuser:
@@ -257,27 +284,24 @@ class UserAdmin(DjangoUserAdmin):
         from .multi_tenant_utils import get_accessible_users
         return get_accessible_users(request.user)
 
+    # Automatically generate username if empty
     def save_model(self, request, obj, form, change):
-        if not change:
+        if not change:  # Only on creation
             obj.created_by = request.user
             if not obj.username or obj.username.strip() == '':
                 if obj.email:
                     base_username = obj.email.split('@')[0]
-                    username = base_username
-                    counter = 1
-                    while User.objects.filter(username=username).exists():
-                        username = f"{base_username}{counter}"
-                        counter += 1
-                    obj.username = username
                 elif obj.phone_number:
                     base_username = f"user_{obj.phone_number}"
-                    username = base_username
-                    counter = 1
-                    while User.objects.filter(username=username).exists():
-                        username = f"{base_username}_{counter}"
-                        counter += 1
-                    obj.username = username
                 else:
                     import uuid
-                    obj.username = f"user_{uuid.uuid4().hex[:8]}"
+                    base_username = f"user_{uuid.uuid4().hex[:8]}"
+
+                username = base_username
+                counter = 1
+                while User.objects.filter(username=username).exists():
+                    username = f"{base_username}_{counter}"
+                    counter += 1
+                obj.username = username
+
         super().save_model(request, obj, form, change)

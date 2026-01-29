@@ -7,6 +7,7 @@ from django.contrib.gis.geos import Point
 from .models import PlotFile
 
 
+
 from .models import (
     SoilType,
     CropType,
@@ -595,14 +596,6 @@ class FarmSerializer(serializers.ModelSerializer):
     farm_owner = UserSerializer(read_only=True)
     created_by = UserSerializer(read_only=True)
 
-    farm_owner_id = serializers.PrimaryKeyRelatedField(
-        source='farm_owner',
-        queryset=User.objects.all(),
-        write_only=True,
-        required=False,
-        allow_null=True
-    )
-
     soil_type = SoilTypeSerializer(read_only=True)
     soil_type_id = serializers.PrimaryKeyRelatedField(
         source='soil_type',
@@ -617,27 +610,6 @@ class FarmSerializer(serializers.ModelSerializer):
         source='crop_type',
         queryset=CropType.objects.all(),
         write_only=True,
-        required=False,
-        allow_null=True
-    )
-    crop_variety = serializers.CharField(required=False, allow_blank=True)
-    variety_type = serializers.ChoiceField(
-        choices=['pre-season', 'seasonal'],
-        required=False,
-        allow_null=True
-    )
-    variety_subtype = serializers.ChoiceField(
-        choices=['wine', 'table'],
-        required=False,
-        allow_null=True
-    )
-    variety_timing = serializers.ChoiceField(
-        choices=['early', 'late'],
-        required=False,
-        allow_null=True
-    )
-    plant_age = serializers.ChoiceField(
-        choices=['0-2'],
         required=False,
         allow_null=True
     )
@@ -657,64 +629,35 @@ class FarmSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id',
-            'farm_uid',
-            'industry',
-            'farm_owner',
-            'farm_owner_id',
-            'created_by',
-            'plot',
-            'plot_id',
-            'address',
-            'area_size',
-            'soil_type',
-            'soil_type_id',
-            'crop_type',
-            'crop_type_id',
-            'farm_document',
-            'plantation_date',
-            'spacing_a',
-            'spacing_b',
-            'crop_variety',
-            'variety_type',
-            'variety_subtype',
-            'variety_timing',
-            'plant_age',
-            'foundation_pruning_date',
-            'fruit_pruning_date',
-            'last_harvesting_date',
-            'resting_period_days',
-            'row_spacing',
-            'plant_spacing',
-            'irrigations',
-            'plants_in_field',
-            'created_at',
-            'updated_at',
+            'id', 'farm_uid', 'industry', 'farm_owner', 'created_by', 'plot', 'plot_id',
+            'address', 'area_size', 'soil_type', 'soil_type_id', 'crop_type', 'crop_type_id',
+            'farm_document', 'plantation_date', 'spacing_a', 'spacing_b', 'crop_variety',
+            'variety_type', 'variety_subtype', 'variety_timing', 'plant_age',
+            'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date',
+            'resting_period_days', 'row_spacing', 'plant_spacing',
+            'flow_rate_liter_per_hour', 'emitters_per_plant',
+            'irrigations', 'plants_in_field', 'created_at', 'updated_at',
         ]
+        read_only_fields = ['farm_uid', 'created_by', 'created_at', 'updated_at']
 
-        read_only_fields = [
-            'farm_uid',
-            'created_by',
-            'created_at',
-            'updated_at',
-        ]
     def create(self, validated_data):
         request = self.context['request']
         user = request.user
         irrigations_data = validated_data.pop('irrigations', [])
 
-        if user.has_role('fieldofficer') and 'farm_owner' not in validated_data:
-            recent_farmer = AutoAssignmentService.get_most_recent_farmer_by_field_officer(user)
-            if not recent_farmer:
-                raise serializers.ValidationError({
-                    'farm_owner_id': 'No recent farmer found. Please provide farm_owner_id.'
-                })
-            validated_data['farm_owner'] = recent_farmer
-            validated_data['created_by'] = user
+        # Determine farm_owner based on role
+        if hasattr(user, 'has_role') and user.has_role('farmer'):
+            validated_data['farm_owner'] = user
+        elif user.is_superuser:
+            # Superuser can assign any farm_owner if provided
+            farm_owner = validated_data.get('farm_owner')
+            validated_data['farm_owner'] = farm_owner or user
+        else:
+            # Field officers or others: assign themselves as created_by
+            validated_data.setdefault('farm_owner', user)
 
-        validated_data.setdefault('farm_owner', user)
         validated_data.setdefault('created_by', user)
-        validated_data.setdefault('industry', user.industry)
+        validated_data.setdefault('industry', getattr(user, 'industry', None))
 
         farm = Farm.objects.create(**validated_data)
 
@@ -725,10 +668,10 @@ class FarmSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         irrigations_data = validated_data.pop('irrigations', None)
-
         farm = super().update(instance, validated_data)
 
         if irrigations_data is not None:
+            # Replace all existing irrigations
             instance.irrigations.all().delete()
             for irrigation in irrigations_data:
                 FarmIrrigation.objects.create(farm=farm, **irrigation)

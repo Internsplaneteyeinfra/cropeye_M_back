@@ -6,6 +6,8 @@ from .forms import FarmAdminForm
 from .forms import FarmIrrigationAdminForm
 from .models import Farm, FarmIrrigation
 from .models import PlotFile
+from django.db import models
+
 
 from .models import (
     SoilType,
@@ -196,7 +198,7 @@ class FarmIrrigationInline(admin.TabularInline):
 
 @admin.register(Farm)
 class FarmAdmin(admin.ModelAdmin):
-    form = FarmAdminForm  # <-- important
+    form = FarmAdminForm  # your custom form
 
     list_display = (
         'farm_owner',
@@ -210,8 +212,16 @@ class FarmAdmin(admin.ModelAdmin):
         'created_at',
     )
     list_filter = ('industry', 'soil_type', 'crop_type', 'created_at', 'created_by')
-    search_fields = ('farm_owner__username', 'farm_uid', 'address', 'created_by__email', 'industry__name', 'crop_variety')
-    readonly_fields = ('farm_uid', 'created_at', 'updated_at')
+    search_fields = (
+        'farm_owner__username',
+        'farm_uid',
+        'address',
+        'created_by__email',
+        'industry__name',
+        'crop_variety'
+    )
+    
+    readonly_fields = ('farm_uid', 'created_at', 'updated_at', 'plants_in_field')
 
     inlines = [
         FarmIrrigationInline,
@@ -229,13 +239,30 @@ class FarmAdmin(admin.ModelAdmin):
                 'area_size',
                 'soil_type',
                 'crop_type',
-                'crop_variety',  # <-- now fully integrated
+                'crop_variety',
                 'plantation_date',
                 'farm_document',
             )
         }),
-        ('Plantation Details', {
-            'fields': ('spacing_a', 'spacing_b'),
+        ('Sugarcane Specific', {
+            'fields': ('spacing_a', 'spacing_b', 'plants_in_field'),
+            'classes': ('collapse',),
+        }),
+        ('Grape Specific', {
+            'fields': (
+                'variety_type',
+                'variety_subtype',
+                'variety_timing',
+                'plant_age',
+                'foundation_pruning_date',
+                'fruit_pruning_date',
+                'last_harvesting_date',
+                'resting_period_days',
+                'row_spacing',
+                'plant_spacing',
+                'flow_rate_liter_per_hour',
+                'emitters_per_plant',
+            ),
             'classes': ('collapse',),
         }),
         ('Metadata', {
@@ -369,14 +396,22 @@ class FarmIrrigationAdmin(LeafletGeoAdmin):
         'farm',
         'irrigation_type',
         'status',
-        'plantation_date_display',  # method, not field
-        'last_harvesting_date_display',  # method, not field
+        'motor_horsepower',
+        'pipe_width_inches',
+        'distance_motor_to_plot_m',
+        'plants_per_acre',
+        'flow_rate_lph',
+        'emitters_count',
     )
 
     list_filter = ('farm', 'irrigation_type', 'status')
     search_fields = ('farm__farm_owner__username',)
 
-    # Make fields editable to show calendar
+    # Make fields editable to show calendar (only keep if needed for other date fields)
+    formfield_overrides = {
+        models.DateField: {'widget': forms.DateInput(attrs={'type': 'date'})},
+    }
+
     fieldsets = (
         ('Irrigation Details', {
             'fields': (
@@ -391,26 +426,11 @@ class FarmIrrigationAdmin(LeafletGeoAdmin):
                 'emitters_count',
             )
         }),
-        ('Crop Dates (From Farm)', {
-            'fields': (
-                'plantation_date',
-                'foundation_pruning_date',
-                'fruit_pruning_date',
-                'last_harvesting_date',
-            )
-        }),
         ('Geographic', {
             'fields': ('location',)
         }),
     )
 
-    def plantation_date_display(self, obj):
-        return obj.farm.plantation_date if obj.farm else None
-    plantation_date_display.short_description = "Plantation Date"
-
-    def last_harvesting_date_display(self, obj):
-        return obj.farm.last_harvesting_date if obj.farm else None
-    last_harvesting_date_display.short_description = "Last Harvesting Date"
 
 
 @admin.register(PlotFile)

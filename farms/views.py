@@ -184,21 +184,17 @@ class CropTypeViewSet(viewsets.ModelViewSet):
         user_industry = get_user_industry(user)
         serializer.save(industry=user_industry)
 class FarmViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Farm model supporting all CRUD operations.
+    Handles farm_owner assignment based on user roles and irrigations.
+    """
     queryset = Farm.objects.all()
     serializer_class = FarmSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['soil_type', 'crop_type', 'farm_owner']
     search_fields = ['address', 'farm_owner__username']
 
-
     def get_serializer_class(self):
-        from .serializers import (
-            FarmSerializer,
-            FarmDetailSerializer,
-            FarmGeoSerializer,
-            FarmWithIrrigationSerializer,
-        )
-
         # Detail view
         if self.action == 'retrieve':
             return FarmDetailSerializer
@@ -209,37 +205,34 @@ class FarmViewSet(viewsets.ModelViewSet):
 
         # Create, Update, Partial Update
         if self.action in ['create', 'update', 'partial_update']:
-            return FarmWithIrrigationSerializer
+            return FarmSerializer  # Use your serializer for all writes
 
         # Default fallback (list, destroy, etc.)
         return FarmSerializer
 
-
     def get_permissions(self):
-            # Allow complete-registration endpoint to be public (no auth required)
-            if getattr(self, 'action', None) == 'complete_registration':
-                return [AllowAny()]
-            # All other actions require authentication
-            return [permissions.IsAuthenticated()]
-    
+        # Allow complete-registration endpoint to be public
+        if getattr(self, 'action', None) == 'complete-registration':
+            return [AllowAny()]
+        return [permissions.IsAuthenticated()]
+
     def get_authenticators(self):
-            # Disable authentication for complete-registration endpoint
-            # Check the URL path since self.action may not be set yet
-            if hasattr(self, 'request') and self.request and 'complete-registration' in self.request.path:
-                return []
-            return super().get_authenticators()
+        # Disable authentication for complete-registration endpoint
+        if hasattr(self, 'request') and self.request and 'complete-registration' in self.request.path:
+            return []
+        return super().get_authenticators()
+
     def get_queryset(self):
         """
         Return farms based on the logged-in user's role:
-        - Farmers: only their own farms
         - Superusers: all farms
+        - Farmers or others: only their own farms
         """
         user = self.request.user
 
         if user.is_superuser:
-            qs = Farm.objects.all()  # Superuser can see all farms
+            qs = Farm.objects.all()
         else:
-            # Normal farmers or staff: only their own farms
             qs = Farm.objects.filter(farm_owner=user)
 
         # Optimize queries
@@ -251,27 +244,27 @@ class FarmViewSet(viewsets.ModelViewSet):
             'plot'
         ).prefetch_related(
             'irrigations',
-            'images',   # optional if you have related images
-            'sensors'   # optional if you have related sensors
+            'images',
+            'sensors'
         )
 
         return qs
 
-
-
-
     def perform_create(self, serializer):
+        """
+        Assign farm_owner and created_by based on user role.
+        """
         user = self.request.user
         data = self.request.data
 
-        # Determine farm_owner based on role
-        if user.has_role('farmer'):
+        # Farmers can only create farms for themselves
+        if hasattr(user, 'has_role') and user.has_role('farmer'):
             farm_owner = user
             if data.get('farm_owner') and str(data.get('farm_owner')) != str(user.id):
                 raise ValidationError({
                     "farm_owner": "Farmers can only create farms for themselves."
                 })
-
+        # Superusers can assign farm_owner if provided
         elif user.is_superuser:
             farm_owner_id = data.get('farm_owner')
             if farm_owner_id:
@@ -284,7 +277,6 @@ class FarmViewSet(viewsets.ModelViewSet):
                     })
             else:
                 farm_owner = user
-
         else:
             raise ValidationError({
                 "detail": "You do not have permission to create a farm."
@@ -293,30 +285,32 @@ class FarmViewSet(viewsets.ModelViewSet):
         industry = getattr(user, 'industry', get_user_industry(user))
 
         serializer.save(
-        farm_owner=farm_owner,
-        created_by=user,
-        industry=industry,
-        crop_variety=data.get('crop_variety'),
-        variety_type=data.get('variety_type'),
-        variety_subtype=data.get('variety_subtype'),
-        variety_timing=data.get('variety_timing'),
-        plant_age=data.get('plant_age'),
-        spacing_a=data.get('spacing_a'),
-        spacing_b=data.get('spacing_b'),
-    )
-
+            farm_owner=farm_owner,
+            created_by=user,
+            industry=industry,
+            crop_variety=data.get('crop_variety'),
+            variety_type=data.get('variety_type'),
+            variety_subtype=data.get('variety_subtype'),
+            variety_timing=data.get('variety_timing'),
+            plant_age=data.get('plant_age'),
+            spacing_a=data.get('spacing_a'),
+            spacing_b=data.get('spacing_b'),
+        )
 
     def perform_update(self, serializer):
+        """
+        Save updated data and ensure field officers specify farm_owner if needed.
+        """
         user = self.request.user
-        if user.has_role('fieldofficer') and not self.request.data.get('farm_owner'):
+        if hasattr(user, 'has_role') and user.has_role('fieldofficer') and not self.request.data.get('farm_owner'):
             raise ValidationError("Field Officer must specify farm_owner.")
         serializer.save()
     @action(
         detail=False,
         methods=['post'],
         url_path='complete-registration',
-        permission_classes=[AllowAny],  # makes this endpoint public
-        authentication_classes=[]  # no authentication required
+        permission_classes=[AllowAny],
+        authentication_classes=[]
     )
     def complete_registration(self, request):
         """

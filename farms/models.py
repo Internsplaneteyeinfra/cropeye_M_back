@@ -673,7 +673,10 @@ class FarmIrrigation(models.Model):
     plants_per_acre          = models.IntegerField(null=True, blank=True)
     flow_rate_lph            = models.FloatField(null=True, blank=True)
     emitters_count           = models.IntegerField(null=True, blank=True)
-    
+    plantation_date          = models.DateField(null=True, blank=True)
+    foundation_pruning_date  = models.DateField(null=True, blank=True)
+    fruit_pruning_date       = models.DateField(null=True, blank=True)
+    last_harvesting_date     = models.DateField(null=True, blank=True)
     class Meta:
         ordering = ['-id']
 

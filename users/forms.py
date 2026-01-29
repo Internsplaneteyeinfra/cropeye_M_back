@@ -14,8 +14,18 @@ class CustomUserCreationForm(UserCreationForm):
             'first_name',
             'last_name',
             'username',
+            'address',
+            'profile_picture',
+            'state',
+            'district',
+            'taluka',
+            'village',
             'role',
             'industry',
+            'created_by',
+            'is_active',
+            'is_staff',
+            'is_superuser',
         )
 
     def clean_username(self):
@@ -34,8 +44,18 @@ class CustomUserChangeForm(UserChangeForm):
             'first_name',
             'last_name',
             'username',
+            'address',
+            'profile_picture',
+            'state',
+            'district',
+            'taluka',
+            'village',
             'role',
             'industry',
+            'created_by',
+            'is_active',
+            'is_staff',
+            'is_superuser',
         )
 
     def clean_username(self):
