@@ -29,7 +29,7 @@ def cascade_delete_farmer_assets(sender, instance, **kwargs):
         is_farmer = True
     
     if is_farmer:
-        logger.info(f"Cascading deletion for farmer {instance.username} (ID: {instance.id})")
+        logger.info(f"Cascading deletion for farmer {instance.phone_number} (ID: {instance.id})")
         
         # Get all related data before deletion
         plots = list(instance.plots.all())
@@ -39,15 +39,15 @@ def cascade_delete_farmer_assets(sender, instance, **kwargs):
         
         # Delete farms first (this will cascade to irrigations)
         for farm in farms:
-            logger.info(f"Deleting farm {farm.farm_uid} for farmer {instance.username}")
+            logger.info(f"Deleting farm {farm.farm_uid} for farmer {instance.phone_number}")
             farm.delete()
         
         # Delete plots
         for plot in plots:
-            logger.info(f"Deleting plot {plot.gat_number} for farmer {instance.username}")
+            logger.info(f"Deleting plot {plot.gat_number} for farmer {instance.phone_number}")
             plot.delete()
         
-        logger.info(f"Successfully cascaded deletion for farmer {instance.username}")
+        logger.info(f"Successfully cascaded deletion for farmer {instance.phone_number}")
 
 
 @receiver(post_delete, sender=Plot)
@@ -105,7 +105,7 @@ def log_farm_deletion(sender, instance, **kwargs):
     """
     Log farm deletion for tracking purposes
     """
-    logger.info(f"Farm {instance.farm_uid} deleted (owner: {instance.farm_owner.username if instance.farm_owner else 'Unknown'})")
+    logger.info(f"Farm {instance.farm_uid} deleted (owner: {instance.farm_owner.phone_number if instance.farm_owner else 'Unknown'})")
 
 
 @receiver(post_delete, sender=FarmIrrigation)

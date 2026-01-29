@@ -27,7 +27,7 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['id', 'username', 'email']
+        fields = ['id', 'phone_number', 'email']
 
 
 class SoilTypeSerializer(serializers.ModelSerializer):
@@ -203,10 +203,10 @@ class PlotSerializer(serializers.ModelSerializer):
 
     # Optional: Show farmer info
     def get_farmer(self, obj):
-        return obj.farmer.username if obj.farmer else None
+        return obj.farmer.phone_number if obj.farmer else None
 
     def get_created_by(self, obj):
-        return obj.created_by.username if obj.created_by else None
+        return obj.created_by.phone_number if obj.created_by else None
 
     # Validate location
     def validate_location(self, value):

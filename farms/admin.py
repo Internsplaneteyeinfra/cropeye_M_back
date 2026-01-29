@@ -207,13 +207,14 @@ class FarmAdmin(admin.ModelAdmin):
         'area_size',
         'soil_type',
         'crop_type',
+        'crop_variety',
         'plantation_date',
         'get_created_by_email',
         'created_at',
     )
     list_filter = ('industry', 'soil_type', 'crop_type', 'created_at', 'created_by')
     search_fields = (
-        'farm_owner__username',
+        'farm_owner__phone_number',
         'farm_uid',
         'address',
         'created_by__email',
@@ -405,7 +406,7 @@ class FarmIrrigationAdmin(LeafletGeoAdmin):
     )
 
     list_filter = ('farm', 'irrigation_type', 'status')
-    search_fields = ('farm__farm_owner__username',)
+    search_fields = ('farm__farm_owner__phone_number',)
 
     # Make fields editable to show calendar (only keep if needed for other date fields)
     formfield_overrides = {

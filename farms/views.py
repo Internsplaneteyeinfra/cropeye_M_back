@@ -192,7 +192,7 @@ class FarmViewSet(viewsets.ModelViewSet):
     serializer_class = FarmSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['soil_type', 'crop_type', 'farm_owner']
-    search_fields = ['address', 'farm_owner__username']
+    search_fields = ['address', 'farm_owner__phone_number']
 
     def get_serializer_class(self):
         # Detail view
@@ -362,9 +362,34 @@ class FarmViewSet(viewsets.ModelViewSet):
                         "coordinates": [list(p.boundary.coords[0])]
                     }
                 return plot_dict
-            
+
+            def serialize_farm(f):
+                return {
+                    "farm_id": f.id,
+                    "farm_uid": str(f.farm_uid),
+                    "area_size": str(f.area_size) if f.area_size is not None else None,
+                    "soil_type_id": f.soil_type_id,
+                    "crop_type_id": f.crop_type_id,
+                    "crop_variety": f.crop_variety,
+                    "variety_type": f.variety_type,
+                    "variety_subtype": f.variety_subtype,
+                    "variety_timing": f.variety_timing,
+                    "plant_age": f.plant_age,
+                    "resting_period_days": f.resting_period_days,
+                    "row_spacing": str(f.row_spacing) if f.row_spacing is not None else None,
+                    "plant_spacing": str(f.plant_spacing) if f.plant_spacing is not None else None,
+                    "flow_rate_liter_per_hour": str(f.flow_rate_liter_per_hour) if f.flow_rate_liter_per_hour is not None else None,
+                    "emitters_per_plant": f.emitters_per_plant,
+                    "spacing_a": str(f.spacing_a) if f.spacing_a is not None else None,
+                    "spacing_b": str(f.spacing_b) if f.spacing_b is not None else None,
+                    "plantation_date": f.plantation_date.isoformat() if f.plantation_date else None,
+                    "foundation_pruning_date": f.foundation_pruning_date.isoformat() if f.foundation_pruning_date else None,
+                    "fruit_pruning_date": f.fruit_pruning_date.isoformat() if f.fruit_pruning_date else None,
+                    "last_harvesting_date": f.last_harvesting_date.isoformat() if f.last_harvesting_date else None,
+                }
+
             plots_data = [serialize_plot(p) for p in result.get("plots", [])]
-            farms_data = [{"farm_id": f.id, "farm_uid": str(f.farm_uid)} for f in result.get("farms", [])]
+            farms_data = [serialize_farm(f) for f in result.get("farms", [])]
             irrigations_data = [{"irrigation_id": i.id} for i in result.get("irrigations", []) if i]
             
             return Response({
@@ -372,7 +397,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                 "message": f"Farmer registration completed with {len(plots_data)} plot(s)",
                 "data": {
                     "farmer_id": result["farmer"].id,
-                    "farmer_username": result["farmer"].username,
+                    "farmer_phone_number": result["farmer"].phone_number,
                     "plots": plots_data,
                     "farms": farms_data,
                     "irrigations": irrigations_data,
@@ -513,7 +538,7 @@ class FarmViewSet(viewsets.ModelViewSet):
                 # Farmer basic info
                 farmer_data = {
                     'id': farmer.id,
-                    'username': farmer.username,
+                    'phone_number': farmer.phone_number,
                     'email': farmer.email,
                     'first_name': farmer.first_name,
                     'last_name': farmer.last_name,
@@ -865,8 +890,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'field_officer': {
                     'id': user.id,
-                    'username': user.username,
-                    'full_name': f"{user.first_name} {user.last_name}".strip() or user.username,
+                    'phone_number': user.phone_number,
+                    'full_name': f"{user.first_name} {user.last_name}".strip() or user.phone_number,
                 },
                 'summary': {
                     'total_farmers': len(farmers_data),
@@ -975,8 +1000,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                         'farm_uid': str(farm.farm_uid),
                         'farm_owner': {
                             'id': farm.farm_owner.id,
-                            'username': farm.farm_owner.username,
-                            'full_name': f"{farm.farm_owner.first_name} {farm.farm_owner.last_name}".strip() or farm.farm_owner.username,
+                            'phone_number': farm.farm_owner.phone_number,
+                            'full_name': f"{farm.farm_owner.first_name} {farm.farm_owner.last_name}".strip() or farm.farm_owner.phone_number,
                             'email': farm.farm_owner.email,
                             'phone_number': farm.farm_owner.phone_number
                         } if farm.farm_owner else None,
@@ -1009,8 +1034,8 @@ class FarmViewSet(viewsets.ModelViewSet):
                         'updated_at': farm.updated_at.isoformat() if farm.updated_at else None,
                         'created_by': {
                             'id': farm.created_by.id,
-                            'username': farm.created_by.username,
-                            'full_name': f"{farm.created_by.first_name} {farm.created_by.last_name}".strip() or farm.created_by.username,
+                            'phone_number': farm.created_by.phone_number,
+                            'full_name': f"{farm.created_by.first_name} {farm.created_by.last_name}".strip() or farm.created_by.phone_number,
                             'email': farm.created_by.email,
                             'phone_number': farm.created_by.phone_number
                         } if farm.created_by else None,
@@ -1053,15 +1078,15 @@ class FarmViewSet(viewsets.ModelViewSet):
                     'ownership': {
                         'farmer': {
                             'id': plot.farmer.id,
-                            'username': plot.farmer.username,
-                            'full_name': f"{plot.farmer.first_name} {plot.farmer.last_name}".strip() or plot.farmer.username,
+                            'phone_number': plot.farmer.phone_number,
+                            'full_name': f"{plot.farmer.first_name} {plot.farmer.last_name}".strip() or plot.farmer.phone_number,
                             'email': plot.farmer.email,
                             'phone_number': plot.farmer.phone_number
                         } if plot.farmer else None,
                         'created_by': {
                             'id': plot.created_by.id,
-                            'username': plot.created_by.username,
-                            'full_name': f"{plot.created_by.first_name} {plot.created_by.last_name}".strip() or plot.created_by.username,
+                            'phone_number': plot.created_by.phone_number,
+                            'full_name': f"{plot.created_by.first_name} {plot.created_by.last_name}".strip() or plot.created_by.phone_number,
                             'email': plot.created_by.email,
                             'phone_number': plot.created_by.phone_number,
                             'role': plot.created_by.role.display_name if plot.created_by and plot.created_by.role else None
@@ -1075,12 +1100,12 @@ class FarmViewSet(viewsets.ModelViewSet):
             # Farmer profile data
             farmer_profile = {
                 'id': user.id,
-                'username': user.username,
+                'phone_number': user.phone_number,
                 'email': user.email,
                 'personal_info': {
                     'first_name': user.first_name,
                     'last_name': user.last_name,
-                    'full_name': f"{user.first_name} {user.last_name}".strip() or user.username,
+                    'full_name': f"{user.first_name} {user.last_name}".strip() or user.phone_number,
                     'phone_number': user.phone_number,
                     'profile_picture': {
                         'url': user.profile_picture.url,
@@ -1379,8 +1404,8 @@ class PlotViewSet(viewsets.ModelViewSet):
                 },
                 'farmer': {
                     'id': plot.farmer.id,
-                    'username': plot.farmer.username,
-                    'full_name': f"{plot.farmer.first_name} {plot.farmer.last_name}".strip() or plot.farmer.username
+                    'phone_number': plot.farmer.phone_number,
+                    'full_name': f"{plot.farmer.first_name} {plot.farmer.last_name}".strip() or plot.farmer.phone_number
                 } if plot.farmer else None,
                 'created_at': plot.created_at.isoformat() if plot.created_at else None,
                 'updated_at': plot.updated_at.isoformat() if plot.updated_at else None,
@@ -1628,9 +1653,34 @@ class CompleteFarmerRegistrationAPIView(APIView):
                         "coordinates": [list(p.boundary.coords[0])]
                     }
                 return plot_dict
-            
+
+            def serialize_farm(f):
+                return {
+                    "farm_id": f.id,
+                    "farm_uid": str(f.farm_uid),
+                    "area_size": str(f.area_size) if f.area_size is not None else None,
+                    "soil_type_id": f.soil_type_id,
+                    "crop_type_id": f.crop_type_id,
+                    "crop_variety": f.crop_variety,
+                    "variety_type": f.variety_type,
+                    "variety_subtype": f.variety_subtype,
+                    "variety_timing": f.variety_timing,
+                    "plant_age": f.plant_age,
+                    "resting_period_days": f.resting_period_days,
+                    "row_spacing": str(f.row_spacing) if f.row_spacing is not None else None,
+                    "plant_spacing": str(f.plant_spacing) if f.plant_spacing is not None else None,
+                    "flow_rate_liter_per_hour": str(f.flow_rate_liter_per_hour) if f.flow_rate_liter_per_hour is not None else None,
+                    "emitters_per_plant": f.emitters_per_plant,
+                    "spacing_a": str(f.spacing_a) if f.spacing_a is not None else None,
+                    "spacing_b": str(f.spacing_b) if f.spacing_b is not None else None,
+                    "plantation_date": f.plantation_date.isoformat() if f.plantation_date else None,
+                    "foundation_pruning_date": f.foundation_pruning_date.isoformat() if f.foundation_pruning_date else None,
+                    "fruit_pruning_date": f.fruit_pruning_date.isoformat() if f.fruit_pruning_date else None,
+                    "last_harvesting_date": f.last_harvesting_date.isoformat() if f.last_harvesting_date else None,
+                }
+
             plots_data = [serialize_plot(p) for p in result.get("plots", [])]
-            farms_data = [{"farm_id": f.id, "farm_uid": str(f.farm_uid)} for f in result.get("farms", [])]
+            farms_data = [serialize_farm(f) for f in result.get("farms", [])]
             irrigations_data = [{"irrigation_id": i.id} for i in result.get("irrigations", []) if i]
             
             return Response({
@@ -1638,7 +1688,7 @@ class CompleteFarmerRegistrationAPIView(APIView):
                 "message": f"Farmer registration completed with {len(plots_data)} plot(s)",
                 "data": {
                     "farmer_id": result["farmer"].id,
-                    "farmer_username": result["farmer"].username,
+                    "farmer_phone_number": result["farmer"].phone_number,
                     "plots": plots_data,
                     "farms": farms_data,
                     "irrigations": irrigations_data,

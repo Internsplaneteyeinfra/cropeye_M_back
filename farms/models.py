@@ -599,7 +599,7 @@ class Farm(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.farm_owner.username} – {self.farm_uid}"
+        return f"{self.farm_owner.phone_number} – {self.farm_uid}"
 
     def farm_uid_str(self) -> str:
         """
@@ -609,8 +609,8 @@ class Farm(models.Model):
         """
         uid = str(self.farm_uid).replace('-', '').upper()
         if self.plot and self.plot.gat_number and self.plot.plot_number:
-            return f"{self.farm_owner.username}-{self.plot.gat_number}-{self.plot.plot_number}-{uid}"
-        return f"{self.farm_owner.username}-{uid}"
+            return f"{self.farm_owner.phone_number}-{self.plot.gat_number}-{self.plot.plot_number}-{uid}"
+        return f"{self.farm_owner.phone_number}-{uid}"
     
     @property
     def plants_in_field(self):

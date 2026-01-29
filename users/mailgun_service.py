@@ -103,7 +103,7 @@ class MailgunEmailService:
         """
         if purpose == 'password_reset':
             subject = 'Password Reset OTP - Farm Management System'
-            text_content = f"""Hello {user.first_name or user.username},
+            text_content = f"""Hello {user.first_name or user.phone_number},
 
 You have requested to reset your password for the Farm Management System.
 
@@ -136,7 +136,7 @@ Farm Management System Team"""
             <h1>Password Reset Request</h1>
         </div>
         <div class="content">
-            <p>Hello {user.first_name or user.username},</p>
+            <p>Hello {user.first_name or user.phone_number},</p>
             <p>You have requested to reset your password for the Farm Management System.</p>
             <div class="otp-box">
                 <p style="margin-top: 0;">Your OTP code is:</p>
@@ -154,7 +154,7 @@ Farm Management System Team"""
         else:
             # Generic OTP email
             subject = f'Your OTP Code - Farm Management System'
-            text_content = f"""Hello {user.first_name or user.username},
+            text_content = f"""Hello {user.first_name or user.phone_number},
 
 Your OTP code is: {otp_code}
 
@@ -178,7 +178,7 @@ Farm Management System Team"""
 </head>
 <body>
     <div class="container">
-        <p>Hello {user.first_name or user.username},</p>
+        <p>Hello {user.first_name or user.phone_number},</p>
         <div class="otp-box">
             <p>Your OTP code is:</p>
             <div class="otp-code">{otp_code}</div>

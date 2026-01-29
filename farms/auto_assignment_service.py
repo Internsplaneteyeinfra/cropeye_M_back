@@ -96,10 +96,10 @@ class AutoAssignmentService:
                 plot.created_by = field_officer
                 plot.save(update_fields=['farmer', 'created_by'])
                 
-                logger.info(f"Auto-assigned farmer {recent_farmer.username} to plot {plot.id}")
+                logger.info(f"Auto-assigned farmer {recent_farmer.phone_number} to plot {plot.id}")
                 return True
             else:
-                logger.warning(f"No recent farmer found for field officer {field_officer.username}")
+                logger.warning(f"No recent farmer found for field officer {field_officer.phone_number}")
                 return False
                 
         except Exception as e:
@@ -127,10 +127,10 @@ class AutoAssignmentService:
                 farm.created_by = field_officer
                 farm.save(update_fields=['farm_owner', 'created_by'])
                 
-                logger.info(f"Auto-assigned farmer {recent_farmer.username} to farm {farm.id}")
+                logger.info(f"Auto-assigned farmer {recent_farmer.phone_number} to farm {farm.id}")
                 return True
             else:
-                logger.warning(f"No recent farmer found for field officer {field_officer.username}")
+                logger.warning(f"No recent farmer found for field officer {field_officer.phone_number}")
                 return False
                 
         except Exception as e:
@@ -152,18 +152,18 @@ class AutoAssignmentService:
         try:
             # Check if farmer has farmer role
             if not farmer.has_role('farmer'):
-                logger.warning(f"User {farmer.username} does not have farmer role")
+                logger.warning(f"User {farmer.phone_number} does not have farmer role")
                 return False
             
             # Check if field officer has fieldofficer role
             if not field_officer.has_role('fieldofficer'):
-                logger.warning(f"User {field_officer.username} does not have fieldofficer role")
+                logger.warning(f"User {field_officer.phone_number} does not have fieldofficer role")
                 return False
             
             # Additional validation: farmer should be created recently (within 24 hours)
             time_threshold = timezone.now() - timedelta(hours=24)
             if farmer.date_joined < time_threshold:
-                logger.warning(f"Farmer {farmer.username} was not created recently")
+                logger.warning(f"Farmer {farmer.phone_number} was not created recently")
                 return False
             
             return True

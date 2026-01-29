@@ -217,7 +217,7 @@ class UserAdmin(DjangoUserAdmin):
     fieldsets = (
         (None, {'fields': ('phone_number', 'password')}),
         ('Personal info', {'fields': (
-            'first_name', 'last_name', 'email', 'username', 'address', 'profile_picture'
+            'first_name', 'last_name', 'email', 'address', 'profile_picture'
         )}),
         ('Location', {'fields': ('state', 'district', 'taluka', 'village')}),
         ('Role & Permissions', {'fields': ('role', 'is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
@@ -233,7 +233,7 @@ class UserAdmin(DjangoUserAdmin):
                 (None, {
                     'classes': ('wide',),
                     'fields': (
-                        'phone_number', 'email', 'first_name', 'last_name', 'username',
+                        'phone_number', 'email', 'first_name', 'last_name',
                         'address', 'profile_picture',
                         'state', 'district', 'taluka', 'village',
                         'role', 'industry', 'created_by',
@@ -247,7 +247,7 @@ class UserAdmin(DjangoUserAdmin):
 
     # Columns in the user list page
     list_display = (
-        'phone_number', 'username', 'email', 'role', 'industry', 'get_created_by_email',
+        'phone_number', 'email', 'first_name', 'last_name', 'role', 'industry', 'get_created_by_email',
         'state', 'district', 'taluka',
         'is_active', 'is_staff', 'is_superuser', 'date_joined'
     )
@@ -260,7 +260,7 @@ class UserAdmin(DjangoUserAdmin):
 
     # Searchable fields
     search_fields = (
-        'phone_number', 'username', 'email', 'first_name', 'last_name',
+        'phone_number', 'email', 'first_name', 'last_name',
         'created_by__phone_number', 'created_by__email', 'industry__name'
     )
 
@@ -284,24 +284,7 @@ class UserAdmin(DjangoUserAdmin):
         from .multi_tenant_utils import get_accessible_users
         return get_accessible_users(request.user)
 
-    # Automatically generate username if empty
     def save_model(self, request, obj, form, change):
         if not change:  # Only on creation
             obj.created_by = request.user
-            if not obj.username or obj.username.strip() == '':
-                if obj.email:
-                    base_username = obj.email.split('@')[0]
-                elif obj.phone_number:
-                    base_username = f"user_{obj.phone_number}"
-                else:
-                    import uuid
-                    base_username = f"user_{uuid.uuid4().hex[:8]}"
-
-                username = base_username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-                obj.username = username
-
         super().save_model(request, obj, form, change)

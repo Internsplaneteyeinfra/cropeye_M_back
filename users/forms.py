@@ -4,7 +4,7 @@ from .models import User
 
 
 class CustomUserCreationForm(UserCreationForm):
-    username = forms.CharField(required=False, empty_value='')
+    """User creation form with phone_number as identifier (no username)."""
 
     class Meta:
         model = User
@@ -13,7 +13,6 @@ class CustomUserCreationForm(UserCreationForm):
             'email',
             'first_name',
             'last_name',
-            'username',
             'address',
             'profile_picture',
             'state',
@@ -28,13 +27,33 @@ class CustomUserCreationForm(UserCreationForm):
             'is_superuser',
         )
 
-    def clean_username(self):
-        # ALWAYS return a string
-        return self.cleaned_data.get('username') or ''
+    def save(self, commit=True):
+        user = User.objects.create_user(
+            phone_number=self.cleaned_data['phone_number'],
+            email=self.cleaned_data.get('email'),
+            password=self.cleaned_data['password1'],
+            first_name=self.cleaned_data.get('first_name', ''),
+            last_name=self.cleaned_data.get('last_name', ''),
+            address=self.cleaned_data.get('address', ''),
+            state=self.cleaned_data.get('state', ''),
+            district=self.cleaned_data.get('district', ''),
+            taluka=self.cleaned_data.get('taluka', ''),
+            village=self.cleaned_data.get('village', ''),
+            role=self.cleaned_data.get('role'),
+            industry=self.cleaned_data.get('industry'),
+            created_by=self.cleaned_data.get('created_by'),
+            is_active=self.cleaned_data.get('is_active', True),
+            is_staff=self.cleaned_data.get('is_staff', False),
+            is_superuser=self.cleaned_data.get('is_superuser', False),
+        )
+        if self.cleaned_data.get('profile_picture'):
+            user.profile_picture = self.cleaned_data['profile_picture']
+            user.save(update_fields=['profile_picture'])
+        return user
 
 
 class CustomUserChangeForm(UserChangeForm):
-    username = forms.CharField(required=False, empty_value='')
+    """User change form (no username)."""
 
     class Meta:
         model = User
@@ -43,7 +62,6 @@ class CustomUserChangeForm(UserChangeForm):
             'email',
             'first_name',
             'last_name',
-            'username',
             'address',
             'profile_picture',
             'state',
@@ -57,6 +75,3 @@ class CustomUserChangeForm(UserChangeForm):
             'is_staff',
             'is_superuser',
         )
-
-    def clean_username(self):
-        return self.cleaned_data.get('username') or ''

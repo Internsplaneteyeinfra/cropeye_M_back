@@ -84,7 +84,7 @@ Thank you for using our services! 🌾"""
             whatsapp_success = self.send_otp(
                 phone_number=user.phone_number,
                 otp_code=otp_code,
-                user_name=user.first_name or user.username
+                user_name=user.first_name or user.phone_number
             )
             
             if whatsapp_success:

@@ -44,7 +44,7 @@ class CompleteFarmerRegistrationService:
             # Step 1: Create Farmer (User) or use existing farmer
             if farmer:
                 # Using existing farmer (self-registration for adding plots)
-                logger.info(f"Using existing farmer: {farmer.username} (ID: {farmer.id})")
+                logger.info(f"Using existing farmer: {farmer.phone_number} (ID: {farmer.id})")
             else:
                 # Create new farmer
                 farmer = CompleteFarmerRegistrationService._create_farmer(data.get('farmer', {}), field_officer)
@@ -154,21 +154,13 @@ class CompleteFarmerRegistrationService:
         if not farmer_data:
             raise serializers.ValidationError("Farmer data is required")
         
-        # Validate required fields
-        required_fields = ['username', 'email', 'password', 'first_name', 'last_name']
+        # Validate required fields (phone_number is the unique identifier)
+        required_fields = ['phone_number', 'email', 'password', 'first_name', 'last_name']
         for field in required_fields:
             if not farmer_data.get(field):
                 raise serializers.ValidationError(f"Farmer {field} is required")
         
-        # Check if username already exists
-        if User.objects.filter(username=farmer_data['username']).exists():
-            raise serializers.ValidationError(f"Username '{farmer_data['username']}' already exists")
-        
-        # Check if email already exists
-        if User.objects.filter(email=farmer_data['email']).exists():
-            raise serializers.ValidationError(f"Email '{farmer_data['email']}' already exists")
-        
-        # Check if phone_number already exists (if provided)
+        # Clean and validate phone number
         phone_number = farmer_data.get('phone_number', '').strip() if farmer_data.get('phone_number') else ''
         if phone_number:
             # Clean phone number (remove non-digits, handle country code)
@@ -189,13 +181,12 @@ class CompleteFarmerRegistrationService:
             # Use cleaned phone number for creation
             farmer_data['phone_number'] = cleaned_phone
         else:
-            # Set to None if not provided (since phone_number is nullable)
-            farmer_data['phone_number'] = None
+            raise serializers.ValidationError("Phone number is required")
         
         # Validate field officer has industry
         if field_officer and not field_officer.industry:
             raise serializers.ValidationError(
-                f'Field officer "{field_officer.username}" must be assigned to an industry before creating farmers. '
+                f'Field officer "{field_officer.phone_number}" must be assigned to an industry before creating farmers. '
                 'Please contact administrator to assign an industry to this field officer account.'
             )
         
@@ -206,26 +197,25 @@ class CompleteFarmerRegistrationService:
         except Role.DoesNotExist:
             raise serializers.ValidationError("Farmer role not found in system")
         
-        # Create farmer with industry assignment from field officer
+        # Create farmer with industry assignment from field officer (phone_number is identifier)
         farmer = User.objects.create_user(
-            username=farmer_data['username'],
+            phone_number=farmer_data['phone_number'],
             email=farmer_data['email'],
             password=farmer_data['password'],
             first_name=farmer_data['first_name'],
             last_name=farmer_data['last_name'],
-            phone_number=farmer_data.get('phone_number'),
             address=farmer_data.get('address', ''),
             village=farmer_data.get('village', ''),
             state=farmer_data.get('state', ''),
             district=farmer_data.get('district', ''),
             taluka=farmer_data.get('taluka', ''),
             role=farmer_role,
-            created_by=field_officer,  # Set the field officer as creator
-            industry=field_officer.industry if field_officer else None  # Assign industry from field officer
+            created_by=field_officer,
+            industry=field_officer.industry if field_officer else None
         )
         
         logger.info(
-            f"Created farmer: {farmer.username} (ID: {farmer.id}) "
+            f"Created farmer: {farmer.phone_number} (ID: {farmer.id}) "
             f"by {field_officer.email if field_officer else 'system'} "
             f"in industry: {farmer.industry.name if farmer.industry else 'None'}"
         )
@@ -338,7 +328,7 @@ class CompleteFarmerRegistrationService:
         else:
             logger.info("Plot saved without boundary (boundary is None)")
         
-        logger.info(f"Created plot: GAT {plot.gat_number} (ID: {plot.id}) for farmer {farmer.username}")
+        logger.info(f"Created plot: GAT {plot.gat_number} (ID: {plot.id}) for farmer {farmer.phone_number}")
         return plot
     
     @staticmethod
@@ -652,7 +642,7 @@ class CompleteFarmerRegistrationService:
         )
         
         logger.info(
-            f"Created farm: {farm.farm_uid} (ID: {farm.id}) for farmer {farmer.username} "
+            f"Created farm: {farm.farm_uid} (ID: {farm.id}) for farmer {farmer.phone_number} "
             f"with crop_category: {crop_category}, plantation_date: {plantation_date}, "
             f"crop_variety: {crop_variety}"
         )

@@ -1,7 +1,30 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 import re
 from django.core.validators import RegexValidator, EmailValidator
+
+
+# ==================== Custom User Manager (phone_number as identifier) ====================
+class UserManager(BaseUserManager):
+    """Custom manager where phone_number is the unique identifier instead of username."""
+
+    def create_user(self, phone_number, email=None, password=None, **extra_fields):
+        if not phone_number:
+            raise ValueError('Users must have a phone_number.')
+        email = self.normalize_email(email) if email else None
+        user = self.model(phone_number=phone_number, email=email, **extra_fields)
+        user.set_password(password)
+        user.save(using=self._db)
+        return user
+
+    def create_superuser(self, phone_number, email=None, password=None, **extra_fields):
+        extra_fields.setdefault('is_staff', True)
+        extra_fields.setdefault('is_superuser', True)
+        if extra_fields.get('is_staff') is not True:
+            raise ValueError('Superuser must have is_staff=True.')
+        if extra_fields.get('is_superuser') is not True:
+            raise ValueError('Superuser must have is_superuser=True.')
+        return self.create_user(phone_number, email=email, password=password, **extra_fields)
 
 # ==================== Industry Model ====================
 class Industry(models.Model):
@@ -49,16 +72,9 @@ class Role(models.Model):
 
 # ==================== User Model ====================
 class User(AbstractUser):
-    # Username for login
-    username = models.CharField(
-    max_length=150,
-    unique=True,
-    blank=True,
-    null=True,
-    help_text="Optional. Letters, digits and @/./+/-/_ only."
-)
+    # Remove username; phone_number is the unique identifier
+    username = None
 
-    
     # Multi-tenant: Role & Industry
     role = models.ForeignKey(
         Role, null=True, blank=True, on_delete=models.SET_NULL, related_name='users', db_column='role'
@@ -77,7 +93,7 @@ class User(AbstractUser):
     email = models.EmailField(unique=True, validators=[EmailValidator()])
     phone_number = models.CharField(
         max_length=15, unique=True, blank=True, null=True,
-        help_text="Phone number (10 digits for India)"
+        help_text="Phone number (10 digits for India) - unique identifier for login"
     )
     address = models.TextField(blank=True)
     profile_picture = models.ImageField(
@@ -120,13 +136,14 @@ class User(AbstractUser):
     # ==================== User Config ====================
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['email', 'first_name', 'last_name']
+    objects = UserManager()
 
     class Meta:
         ordering = ['-date_joined']
 
     def __str__(self):
         role = self.role.name if self.role else "NoRole"
-        identifier = self.username or self.phone_number or self.email or "Unknown"
+        identifier = self.phone_number or self.email or "Unknown"
         return f"{identifier} ({role})"
 
     # ==================== Role Helpers ====================

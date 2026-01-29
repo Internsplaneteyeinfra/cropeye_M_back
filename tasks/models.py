@@ -66,7 +66,7 @@ class TaskComment(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"Comment by {self.user.username} on {self.task.title}"
+        return f"Comment by {self.user.phone_number} on {self.task.title}"
 
 class TaskAttachment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='attachments')

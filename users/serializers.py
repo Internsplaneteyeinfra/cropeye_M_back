@@ -66,7 +66,7 @@ class FarmerWithPlotsSerializer(serializers.ModelSerializer):
     class Meta:
         model = User 
         fields = [
-            'id', 'username', 'first_name', 'last_name', 'email', 'phone_number',
+            'id', 'phone_number', 'first_name', 'last_name', 'email',
             'village', 'district', 'role', 'plots'
         ]
 
@@ -97,8 +97,8 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'id', 'phone_number', 'email', 'first_name', 'last_name', 
+            'address', 'village', 'taluka', 'district', 'state',
             'role', 'industry', 'created_by', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -135,8 +135,8 @@ class FarmerDetailSerializer(UserSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'id', 'phone_number', 'email', 'first_name', 'last_name', 
+            'address', 'village', 'taluka', 'district', 'state',
             'role', 'created_by', 'created_at', 'updated_at',
             'plots', 'farms', 'irrigation_details', 'plantation_details', 'agricultural_summary'
         ]
@@ -205,10 +205,9 @@ class FarmerDetailSerializer(UserSerializer):
                 'updated_at': farm.updated_at.isoformat() if farm.updated_at else None,
                 'created_by': {
                     'id': farm.created_by.id,
-                    'username': farm.created_by.username,
-                    'full_name': f"{farm.created_by.first_name} {farm.created_by.last_name}".strip() or farm.created_by.username,
-                    'email': farm.created_by.email,
-                    'phone_number': farm.created_by.phone_number
+                    'phone_number': farm.created_by.phone_number,
+                    'full_name': f"{farm.created_by.first_name} {farm.created_by.last_name}".strip() or farm.created_by.phone_number,
+                    'email': farm.created_by.email
                 } if farm.created_by else None
             }
             farms_data.append(farm_info)
@@ -304,7 +303,7 @@ class FieldOfficerWithFarmersSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'first_name', 'last_name', 'email', 'phone_number',
+            'id', 'phone_number', 'first_name', 'last_name', 'email',
             'role', 'farmers'
         ]
 
@@ -331,8 +330,8 @@ class FarmerSerializer(UserSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'id', 'phone_number', 'email', 'first_name', 'last_name', 
+            'address', 'village', 'taluka', 'district', 'state',
             'role', 'created_by', 'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -352,8 +351,8 @@ class ManagerHierarchySerializer(UserSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'id', 'phone_number', 'email', 'first_name', 'last_name', 
+            'address', 'village', 'taluka', 'district', 'state',
             'role', 'created_by', 'created_at', 'updated_at',
             'field_officers', 'field_officers_count', 'total_farmers_count'
         ]
@@ -390,8 +389,8 @@ class OwnerHierarchySerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'username', 'email', 'first_name', 'last_name', 
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state',
+            'id', 'phone_number', 'email', 'first_name', 'last_name', 
+            'address', 'village', 'taluka', 'district', 'state',
             'role', 'created_at', 'updated_at',
             'managers', 'managers_count', 'total_field_officers', 'total_farmers'
         ]
@@ -425,25 +424,22 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'username', 'email', 'password', 'first_name', 'last_name',
-            'phone_number', 'address', 'village', 'taluka', 'district', 'state','profile_picture',
+            'phone_number', 'email', 'password', 'first_name', 'last_name',
+            'address', 'village', 'taluka', 'district', 'state', 'profile_picture',
             'role_id', 'industry'
         ]
     
     def validate_phone_number(self, value):
-        """Validate phone number format (10 digits for India) and handle +91 country code"""
+        """Validate phone number format (10 digits for India) and uniqueness"""
         import re
         if value:
-            # Remove all non-digit characters
             cleaned_phone = re.sub(r'\D', '', value)
-            
-            # If starts with 91 (country code), remove it to get 10 digits
             if cleaned_phone.startswith('91') and len(cleaned_phone) == 12:
                 cleaned_phone = cleaned_phone[2:]
-            
-            # Validate it's exactly 10 digits
             if len(cleaned_phone) != 10:
                 raise serializers.ValidationError("Phone number must be exactly 10 digits (or 12 digits with +91).")
+            if User.objects.filter(phone_number=cleaned_phone).exists():
+                raise serializers.ValidationError("A user with this phone number already exists.")
             return cleaned_phone
         raise serializers.ValidationError("Phone number is required.")
     
@@ -584,24 +580,30 @@ class UserCreateSerializer(serializers.ModelSerializer):
                     'industry': 'Industry must be provided or inherited from creator.'
                 })
 
-        # --- Auto-generate username if missing ---
-        if not validated_data.get('username'):
-            if validated_data.get('phone_number'):
-                validated_data['username'] = f"user_{validated_data['phone_number']}"
-            elif validated_data.get('email'):
-                validated_data['username'] = validated_data['email'].split('@')[0]
-            else:
-                validated_data['username'] = f"user_{User.objects.count() + 1}"
+        # --- phone_number is required (unique identifier) ---
+        phone_number = validated_data.get('phone_number')
+        if not phone_number:
+            raise serializers.ValidationError({"phone_number": "Phone number is required."})
 
-        # --- CREATE USER using create_user ---
+        # --- CREATE USER using create_user (phone_number as identifier) ---
         user = User.objects.create_user(
-            **validated_data,
+            phone_number=phone_number,
             password=password,
             role=role,
-            created_by=creator
+            created_by=creator,
+            industry=validated_data.get('industry'),
+            email=validated_data.get('email'),
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            address=validated_data.get('address', ''),
+            village=validated_data.get('village', ''),
+            taluka=validated_data.get('taluka', ''),
+            district=validated_data.get('district', ''),
+            state=validated_data.get('state', ''),
+            profile_picture=validated_data.get('profile_picture'),
         )
 
-        logger.info(f"User {user.username} created successfully with role {role.name} and industry {user.industry.name}")
+        logger.info(f"User {user.phone_number} created successfully with role {role.name} and industry {user.industry.name if user.industry else 'None'}")
         return user
 
 
@@ -739,7 +741,6 @@ class SimpleUserSerializer(serializers.ModelSerializer):
             'district',
             'taluka',
             'password',
-            'username',
             'role',
             'industry',
             'created_at',
@@ -798,35 +799,23 @@ class SimpleUserSerializer(serializers.ModelSerializer):
                 'role': 'Farmer role not found in system. Please contact administrator.'
             })
         
-        # Auto-generate username if not provided
-        if 'username' not in validated_data or not validated_data.get('username'):
-            if validated_data.get('email'):
-                base_username = validated_data['email'].split('@')[0]
-                username = base_username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}{counter}"
-                    counter += 1
-                validated_data['username'] = username
-            elif validated_data.get('phone_number'):
-                base_username = f"farmer_{validated_data['phone_number']}"
-                username = base_username
-                counter = 1
-                while User.objects.filter(username=username).exists():
-                    username = f"{base_username}_{counter}"
-                    counter += 1
-                validated_data['username'] = username
-            else:
-                import uuid
-                validated_data['username'] = f"farmer_{uuid.uuid4().hex[:8]}"
-        
-        # Create farmer user
+        # phone_number is required (unique identifier)
+        phone_number = validated_data.get('phone_number')
+        if not phone_number:
+            raise serializers.ValidationError({"phone_number": "Phone number is required."})
+
+        # Create farmer user (phone_number as identifier)
         user = User.objects.create_user(
-            **validated_data,
+            phone_number=phone_number,
+            email=validated_data.get('email'),
+            first_name=validated_data.get('first_name', ''),
+            last_name=validated_data.get('last_name', ''),
+            password=password,
             role=farmer_role,
-            created_by=None  # Self-registered, no creator
+            created_by=None,
+            state=validated_data.get('state'),
+            district=validated_data.get('district'),
+            taluka=validated_data.get('taluka'),
         )
-        user.set_password(password)
-        user.save()
         
         return user

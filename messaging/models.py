@@ -31,7 +31,7 @@ class Conversation(models.Model):
         ]
     
     def __str__(self):
-        return f"Conversation: {self.participant1.username} ↔ {self.participant2.username}"
+        return f"Conversation: {self.participant1.phone_number} ↔ {self.participant2.phone_number}"
     
     def get_other_participant(self, user):
         """Get the other participant in the conversation"""
@@ -88,7 +88,7 @@ class Message(models.Model):
         ]
     
     def __str__(self):
-        return f"Message from {self.sender.username} at {self.created_at}"
+        return f"Message from {self.sender.phone_number} at {self.created_at}"
     
     def mark_as_read(self):
         """Mark message as read"""

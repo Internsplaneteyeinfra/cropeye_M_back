@@ -178,14 +178,14 @@ class LoginView(APIView):
                     'description': user.industry.description
                 }
             
-            logger.info(f"Successful login for user: {user.username} (ID: {user.id})")
+            logger.info(f"Successful login for user: {user.phone_number} (ID: {user.id})")
             
             return Response({
                 'access': str(refresh.access_token),
                 'refresh': str(refresh),
                 'user': {
                     'id': user.id,
-                    'username': user.username,
+                    'phone_number': user.phone_number,
                     'phone_number': user.phone_number,
                     'email': user.email,
                     'first_name': user.first_name,

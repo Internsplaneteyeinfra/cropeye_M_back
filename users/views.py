@@ -157,7 +157,7 @@ class UserViewSet(viewsets.ModelViewSet):
         import logging
         logger = logging.getLogger(__name__)
         logger.info(f"=== USER CREATION REQUEST ===")
-        logger.info(f"Creator: {request.user.username} (Role: {request.user.role.name if request.user.role else None})")
+        logger.info(f"Creator: {request.user.phone_number} (Role: {request.user.role.name if request.user.role else None})")
         logger.info(f"Request data type: {type(request.data)}")
         logger.info(f"role_id from request.data: {request.data.get('role_id')} (type: {type(request.data.get('role_id'))})")
         logger.info(f"All keys in request.data: {list(request.data.keys())}")
@@ -221,17 +221,23 @@ class UserViewSet(viewsets.ModelViewSet):
                 # Owner or manager creating owner - use their industry
                 if not user_industry:
                     return Response({
-                        'error': f'User "{request.user.username}" must be assigned to an industry before creating owners. Please contact administrator to assign an industry.',
+                        'error': f'User "{request.user.phone_number}" must be assigned to an industry before creating owners. Please contact administrator to assign an industry.',
                         'user_id': request.user.id,
-                        'username': request.user.username,
+                        'phone_number': request.user.phone_number,
                         'role': request.user.role.name if request.user.role else 'unknown'
                     }, status=400)
                 owner_industry = user_industry
             
             # Assign industry to owner
             owner_data['industry'] = owner_industry
-            
-            # Create the owner
+            # Resolve role_id to role (create_user expects role=Role instance)
+            role_id = owner_data.pop('role_id', None) or owner_data.pop('role', None)
+            if role_id is not None:
+                from .models import Role
+                role_obj = Role.objects.filter(id=role_id).first()
+                if role_obj:
+                    owner_data['role'] = role_obj
+            # Create the owner (phone_number is identifier)
             owner = User.objects.create_user(**owner_data)
             
             # Return special response for owner creation
@@ -239,7 +245,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'message': 'Owner created successfully. Owner can now monitor all managers including the one who created them.',
                 'id': owner.id,
-                'username': owner.username,
+                'phone_number': owner.phone_number,
                 'email': owner.email,
                 'role': {
                     'id': owner.role.id,
@@ -252,7 +258,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 } if owner.industry else None,
                 'created_by': {
                     'id': request.user.id,
-                    'username': request.user.username,
+                    'phone_number': request.user.phone_number,
                     'role': request.user.role.name if request.user.role else 'unknown'
                 },
                 'note': 'Owner has elevated permissions to monitor all managers'
@@ -288,9 +294,9 @@ class UserViewSet(viewsets.ModelViewSet):
                 # Ensure user has an industry
                 if not user_industry:
                     return Response({
-                        'error': f'User "{request.user.username}" must be assigned to an industry before creating users. Please contact administrator to assign an industry.',
+                        'error': f'User "{request.user.phone_number}" must be assigned to an industry before creating users. Please contact administrator to assign an industry.',
                         'user_id': request.user.id,
-                        'username': request.user.username,
+                        'phone_number': request.user.phone_number,
                         'role': request.user.role.name if request.user.role else 'unknown'
                     }, status=400)
                 
@@ -323,7 +329,7 @@ class UserViewSet(viewsets.ModelViewSet):
             logger = logging.getLogger(__name__)
             logger.error(
                 f"CRITICAL: Industry is None when creating user. "
-                f"Creator: {creator.username if creator else 'None'}, "
+                f"Creator: {creator.phone_number if creator else 'None'}, "
                 f"Creator Industry: {creator.industry.name if creator and creator.industry else 'None'}"
             )
             raise ValueError("Industry must be set before creating user. This should not happen.")
@@ -339,7 +345,7 @@ class UserViewSet(viewsets.ModelViewSet):
             import logging
             logger = logging.getLogger(__name__)
             logger.error(
-                f"CRITICAL: Role was missing after save for user {instance.username}. "
+                f"CRITICAL: Role was missing after save for user {instance.phone_number}. "
                 f"This should not happen - role should be set in serializer.create()"
             )
             # Try to get role from validated_data if available
@@ -350,7 +356,7 @@ class UserViewSet(viewsets.ModelViewSet):
                     role = Role.objects.get(id=role_id)
                     instance.role = role
                     instance.save(update_fields=['role'])
-                    logger.warning(f"Fixed role for user {instance.username} - set to {role.name}")
+                    logger.warning(f"Fixed role for user {instance.phone_number} - set to {role.name}")
                 except Role.DoesNotExist:
                     logger.error(f"Could not fix role - Role with ID {role_id} does not exist")
         
@@ -363,15 +369,15 @@ class UserViewSet(viewsets.ModelViewSet):
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(
-                    f"CRITICAL: Industry was missing after save for user {instance.username}. "
-                    f"Set it from creator {creator.username}'s industry: {creator.industry.name}"
+                    f"CRITICAL: Industry was missing after save for user {instance.phone_number}. "
+                    f"Set it from creator {creator.phone_number}'s industry: {creator.industry.name}"
                 )
             else:
                 import logging
                 logger = logging.getLogger(__name__)
                 logger.error(
-                    f"CRITICAL: Industry was missing after save for user {instance.username} "
-                    f"and creator {creator.username if creator else 'None'} has no industry!"
+                    f"CRITICAL: Industry was missing after save for user {instance.phone_number} "
+                    f"and creator {creator.phone_number if creator else 'None'} has no industry!"
                 )
         
         # Final verification log
@@ -379,7 +385,7 @@ class UserViewSet(viewsets.ModelViewSet):
             import logging
             logger = logging.getLogger(__name__)
             logger.info(
-                f"✅ User {instance.username} (ID: {instance.id}) saved correctly: "
+                f"✅ User {instance.phone_number} (ID: {instance.id}) saved correctly: "
                 f"Role={instance.role.name} (ID: {instance.role.id}), "
                 f"Industry={instance.industry.name} (ID: {instance.industry.id})"
             )
@@ -470,7 +476,7 @@ class UserViewSet(viewsets.ModelViewSet):
             return Response({
                 "manager": {
                     "id": user.id,
-                    "username": user.username,
+                    "phone_number": user.phone_number,
                     "first_name": user.first_name,
                     "last_name": user.last_name,
                 },
@@ -534,7 +540,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'success': True,
                 'creator': {
                     'id': creator.id,
-                    'username': creator.username,
+                    'phone_number': creator.phone_number,
                     'email': creator.email,
                     'role': creator.role.name if creator.role else 'unknown',
                     'first_name': creator.first_name,
@@ -586,7 +592,7 @@ class UserViewSet(viewsets.ModelViewSet):
             owner = owners.first()
             owner_contact = {
                 'id': owner.id,
-                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.username,
+                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.phone_number,
                 'role': 'Owner',
                 'email': owner.email,
                 'phone': owner.phone_number,
@@ -599,7 +605,7 @@ class UserViewSet(viewsets.ModelViewSet):
         for fo in field_officers:
             field_officer_contacts.append({
                 'id': fo.id,
-                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.username,
+                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.phone_number,
                 'role': 'Field Officer',
                 'email': fo.email,
                 'phone': fo.phone_number,
@@ -616,17 +622,17 @@ class UserViewSet(viewsets.ModelViewSet):
         for farmer in farmers:
             farmer_contacts.append({
                 'id': farmer.id,
-                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.username,
+                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.phone_number,
                 'role': 'Farmer',
                 'email': farmer.email,
                 'phone': farmer.phone_number,
                 'address': f"{farmer.address}, {farmer.village}, {farmer.district}, {farmer.state}".replace(', , ', ', ').strip(', '),
-                'field_officer': farmer.created_by.username if farmer.created_by else None
+                'field_officer': farmer.created_by.phone_number if farmer.created_by else None
             })
         
         return Response({
             'user_role': 'Manager',
-            'user_name': f"{manager.first_name} {manager.last_name}".strip() or manager.username,
+            'user_name': f"{manager.first_name} {manager.last_name}".strip() or manager.phone_number,
             'contacts': {
                 'owner': owner_contact,
                 'field_officers': field_officer_contacts,
@@ -646,7 +652,7 @@ class UserViewSet(viewsets.ModelViewSet):
             manager = field_officer.created_by
             manager_contact = {
                 'id': manager.id,
-                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.username,
+                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.phone_number,
                 'role': 'Manager',
                 'email': manager.email,
                 'phone': manager.phone_number,
@@ -660,7 +666,7 @@ class UserViewSet(viewsets.ModelViewSet):
             owner = owners.first()
             owner_contact = {
                 'id': owner.id,
-                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.username,
+                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.phone_number,
                 'role': 'Owner',
                 'email': owner.email,
                 'phone': owner.phone_number,
@@ -673,7 +679,7 @@ class UserViewSet(viewsets.ModelViewSet):
         for farmer in farmers:
             farmer_contacts.append({
                 'id': farmer.id,
-                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.username,
+                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.phone_number,
                 'role': 'Farmer',
                 'email': farmer.email,
                 'phone': farmer.phone_number,
@@ -682,7 +688,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         return Response({
             'user_role': 'Field Officer',
-            'user_name': f"{field_officer.first_name} {field_officer.last_name}".strip() or field_officer.username,
+            'user_name': f"{field_officer.first_name} {field_officer.last_name}".strip() or field_officer.phone_number,
             'contacts': {
                 'manager': manager_contact,
                 'owner': owner_contact,
@@ -701,7 +707,7 @@ class UserViewSet(viewsets.ModelViewSet):
             fo = farmer.created_by
             field_officer_contact = {
                 'id': fo.id,
-                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.username,
+                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.phone_number,
                 'role': 'Field Officer',
                 'email': fo.email,
                 'phone': fo.phone_number,
@@ -714,7 +720,7 @@ class UserViewSet(viewsets.ModelViewSet):
             manager = farmer.created_by.created_by
             manager_contact = {
                 'id': manager.id,
-                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.username,
+                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.phone_number,
                 'role': 'Manager',
                 'email': manager.email,
                 'phone': manager.phone_number,
@@ -728,7 +734,7 @@ class UserViewSet(viewsets.ModelViewSet):
             owner = owners.first()
             owner_contact = {
                 'id': owner.id,
-                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.username,
+                'name': f"{owner.first_name} {owner.last_name}".strip() or owner.phone_number,
                 'role': 'Owner',
                 'email': owner.email,
                 'phone': owner.phone_number,
@@ -737,7 +743,7 @@ class UserViewSet(viewsets.ModelViewSet):
         
         return Response({
             'user_role': 'Farmer',
-            'user_name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.username,
+            'user_name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.phone_number,
             'contacts': {
                 'field_officer': field_officer_contact,
                 'manager': manager_contact,
@@ -753,7 +759,7 @@ class UserViewSet(viewsets.ModelViewSet):
         for manager in managers:
             manager_contacts.append({
                 'id': manager.id,
-                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.username,
+                'name': f"{manager.first_name} {manager.last_name}".strip() or manager.phone_number,
                 'role': 'Manager',
                 'email': manager.email,
                 'phone': manager.phone_number,
@@ -767,12 +773,12 @@ class UserViewSet(viewsets.ModelViewSet):
         for fo in field_officers:
             field_officer_contacts.append({
                 'id': fo.id,
-                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.username,
+                'name': f"{fo.first_name} {fo.last_name}".strip() or fo.phone_number,
                 'role': 'Field Officer',
                 'email': fo.email,
                 'phone': fo.phone_number,
                 'address': f"{fo.address}, {fo.village}, {fo.district}, {fo.state}".replace(', , ', ', ').strip(', '),
-                'manager': fo.created_by.username if fo.created_by else None,
+                'manager': fo.created_by.phone_number if fo.created_by else None,
                 'farmers_count': fo.created_users.filter(role__name='farmer').count()
             })
         
@@ -782,17 +788,17 @@ class UserViewSet(viewsets.ModelViewSet):
         for farmer in farmers:
             farmer_contacts.append({
                 'id': farmer.id,
-                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.username,
+                'name': f"{farmer.first_name} {farmer.last_name}".strip() or farmer.phone_number,
                 'role': 'Farmer',
                 'email': farmer.email,
                 'phone': farmer.phone_number,
                 'address': f"{farmer.address}, {farmer.village}, {farmer.district}, {farmer.state}".replace(', , ', ', ').strip(', '),
-                'field_officer': farmer.created_by.username if farmer.created_by else None
+                'field_officer': farmer.created_by.phone_number if farmer.created_by else None
             })
         
         return Response({
             'user_role': 'Owner',
-            'user_name': f"{owner.first_name} {owner.last_name}".strip() or owner.username,
+            'user_name': f"{owner.first_name} {owner.last_name}".strip() or owner.phone_number,
             'contacts': {
                 'managers': manager_contacts,
                 'field_officers': field_officer_contacts,
@@ -908,7 +914,7 @@ class UserViewSet(viewsets.ModelViewSet):
                 'refresh': str(refresh),
                 'user': {
                     'id': user.id,
-                    'username': user.username,
+                    'phone_number': user.phone_number,
                     'phone_number': user.phone_number,
                     'email': user.email,
                     'first_name': user.first_name,
