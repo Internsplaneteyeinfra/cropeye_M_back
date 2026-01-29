@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 import json
 from django.contrib.gis.geos import Point
 from .models import PlotFile
-
+from django.core.exceptions import PermissionDenied
 
 
 from .models import (
@@ -593,6 +593,7 @@ class FarmIrrigationSerializer(serializers.ModelSerializer):
         ]
 
 class FarmSerializer(serializers.ModelSerializer):
+    # Read-only nested representations
     farm_owner = UserSerializer(read_only=True)
     created_by = UserSerializer(read_only=True)
 
@@ -629,35 +630,54 @@ class FarmSerializer(serializers.ModelSerializer):
     class Meta:
         model = Farm
         fields = [
-            'id', 'farm_uid', 'industry', 'farm_owner', 'created_by', 'plot', 'plot_id',
-            'address', 'area_size', 'soil_type', 'soil_type_id', 'crop_type', 'crop_type_id',
-            'farm_document', 'plantation_date', 'spacing_a', 'spacing_b', 'crop_variety',
-            'variety_type', 'variety_subtype', 'variety_timing', 'plant_age',
-            'foundation_pruning_date', 'fruit_pruning_date', 'last_harvesting_date',
-            'resting_period_days', 'row_spacing', 'plant_spacing',
-            'flow_rate_liter_per_hour', 'emitters_per_plant',
-            'irrigations', 'plants_in_field', 'created_at', 'updated_at',
+            'id', 'farm_uid', 'industry',
+            'farm_owner', 'created_by',
+            'plot', 'plot_id',
+            'address', 'area_size',
+            'soil_type', 'soil_type_id',
+            'crop_type', 'crop_type_id',
+            'farm_document', 'plantation_date',
+            'spacing_a', 'spacing_b',
+            'crop_variety',
+            'variety_type', 'variety_subtype',
+            'variety_timing', 'plant_age',
+            'foundation_pruning_date',
+            'fruit_pruning_date',
+            'last_harvesting_date',
+            'resting_period_days',
+            'row_spacing', 'plant_spacing',
+            'flow_rate_liter_per_hour',
+            'emitters_per_plant',
+            'irrigations',
+            'plants_in_field',
+            'created_at', 'updated_at',
         ]
-        read_only_fields = ['farm_uid', 'created_by', 'created_at', 'updated_at']
 
+        read_only_fields = [
+            'farm_uid',
+            'farm_owner',
+            'created_by',
+            'industry',
+            'created_at',
+            'updated_at',
+        ]
+
+    # -----------------------
+    # CREATE
+    # -----------------------
     def create(self, validated_data):
         request = self.context['request']
         user = request.user
         irrigations_data = validated_data.pop('irrigations', [])
 
-        # Determine farm_owner based on role
-        if hasattr(user, 'has_role') and user.has_role('farmer'):
-            validated_data['farm_owner'] = user
-        elif user.is_superuser:
-            # Superuser can assign any farm_owner if provided
-            farm_owner = validated_data.get('farm_owner')
-            validated_data['farm_owner'] = farm_owner or user
+        # Assign ownership
+        if user.is_superuser:
+            validated_data['farm_owner'] = validated_data.get('farm_owner', user)
         else:
-            # Field officers or others: assign themselves as created_by
-            validated_data.setdefault('farm_owner', user)
+            validated_data['farm_owner'] = user
 
-        validated_data.setdefault('created_by', user)
-        validated_data.setdefault('industry', getattr(user, 'industry', None))
+        validated_data['created_by'] = user
+        validated_data['industry'] = getattr(user, 'industry', None)
 
         farm = Farm.objects.create(**validated_data)
 
@@ -666,21 +686,42 @@ class FarmSerializer(serializers.ModelSerializer):
 
         return farm
 
+    # -----------------------
+    # UPDATE / PATCH
+    # -----------------------
     def update(self, instance, validated_data):
+        request = self.context['request']
+        user = request.user
+
+        # Permission check
+        if not user.is_superuser and instance.farm_owner != user:
+            raise PermissionDenied("You can update only your own farm.")
+
         irrigations_data = validated_data.pop('irrigations', None)
         farm = super().update(instance, validated_data)
 
         if irrigations_data is not None:
-            # Replace all existing irrigations
             instance.irrigations.all().delete()
             for irrigation in irrigations_data:
                 FarmIrrigation.objects.create(farm=farm, **irrigation)
 
         return farm
 
+    # -----------------------
+    # DELETE
+    # -----------------------
+    def validate(self, attrs):
+        request = self.context.get('request')
+        if request and request.method == 'DELETE':
+            farm = self.instance
+            user = request.user
+            if not user.is_superuser and farm.farm_owner != user:
+                raise PermissionDenied("You can delete only your own farm.")
+        return attrs
+
 class FarmDetailSerializer(FarmSerializer):
-    images      = FarmImageSerializer(many=True, read_only=True)
-    sensors     = FarmSensorSerializer(many=True, read_only=True)
+    images = FarmImageSerializer(many=True, read_only=True)
+    sensors = FarmSensorSerializer(many=True, read_only=True)
     irrigations = FarmIrrigationSerializer(many=True, read_only=True)
 
     class Meta(FarmSerializer.Meta):
@@ -689,6 +730,7 @@ class FarmDetailSerializer(FarmSerializer):
             'sensors',
             'irrigations',
         ]
+
 
 
 class PlotGeoSerializer(GeoFeatureModelSerializer):

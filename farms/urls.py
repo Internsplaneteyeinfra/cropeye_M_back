@@ -27,7 +27,8 @@ router.register('plantation-types', PlantationTypeViewSet, basename='plantationt
 router.register('planting-methods', PlantingMethodViewSet, basename='plantingmethod')
 router.register('irrigation-types', IrrigationTypeViewSet, basename='irrigationtype')
 
-router.register('farms', FarmViewSet, basename='farm')
+router.register(r'farms', FarmViewSet, basename='farm')
+
 router.register('plots', PlotViewSet, basename='plot')
 
 # ✅ Plot files CRUD
@@ -43,4 +44,5 @@ urlpatterns = [
     path('crop-fields-config/', get_crop_fields_config, name='crop-fields-config'),
     path('crop-type-choices/', get_crop_type_choices, name='crop-type-choices'),
     path('register/farmer/', CompleteFarmerRegistrationAPIView.as_view(), name='farmer-register'),
+   
 ]

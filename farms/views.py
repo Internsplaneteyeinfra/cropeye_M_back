@@ -188,7 +188,7 @@ class FarmViewSet(viewsets.ModelViewSet):
     ViewSet for Farm model supporting all CRUD operations.
     Handles farm_owner assignment based on user roles and irrigations.
     """
-    queryset = Farm.objects.all()
+  
     serializer_class = FarmSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ['soil_type', 'crop_type', 'farm_owner']
@@ -287,15 +287,9 @@ class FarmViewSet(viewsets.ModelViewSet):
         serializer.save(
             farm_owner=farm_owner,
             created_by=user,
-            industry=industry,
-            crop_variety=data.get('crop_variety'),
-            variety_type=data.get('variety_type'),
-            variety_subtype=data.get('variety_subtype'),
-            variety_timing=data.get('variety_timing'),
-            plant_age=data.get('plant_age'),
-            spacing_a=data.get('spacing_a'),
-            spacing_b=data.get('spacing_b'),
+            industry=industry
         )
+
 
     def perform_update(self, serializer):
         """
