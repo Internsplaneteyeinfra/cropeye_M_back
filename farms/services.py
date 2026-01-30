@@ -260,10 +260,12 @@ class CompleteFarmerRegistrationService:
             location = None
             boundary = None
             
-            # Handle point location (center point)
+            # Handle point location (center point): { "lat", "lon" } or { "lat", "lng" }
             if "location" in plot_data and plot_data["location"]:
                 loc = plot_data["location"]
-                location = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
+                lon = loc.get("lon") if loc.get("lon") is not None else loc.get("lng", 0.0)
+                lat = loc.get("lat", 0.0)
+                location = Point(float(lon), float(lat))
                 logger.info(f"Created location Point: {location}")
             
             # Handle boundary polygon coordinates
@@ -295,8 +297,9 @@ class CompleteFarmerRegistrationService:
                     polygon_coords = []
                     for coord in coords:
                         if isinstance(coord, dict):
-                            # {"lon": x, "lat": y} format
-                            polygon_coords.append((float(coord.get("lon", 0.0)), float(coord.get("lat", 0.0))))
+                            # {"lon": x, "lat": y} or {"lng": x, "lat": y}
+                            x = coord.get("lon") if coord.get("lon") is not None else coord.get("lng", 0.0)
+                            polygon_coords.append((float(x), float(coord.get("lat", 0.0))))
                         elif isinstance(coord, (list, tuple)) and len(coord) >= 2:
                             # [lon, lat] format
                             polygon_coords.append((float(coord[0]), float(coord[1])))
@@ -439,14 +442,15 @@ class CompleteFarmerRegistrationService:
             irrigation = None
             if irrigation_data:
                 loc = irrigation_data.get("location")
-                if isinstance(loc, dict) and "lat" in loc and "lon" in loc:
-                    loc_point = Point(loc.get("lon", 0.0), loc.get("lat", 0.0))
+                if isinstance(loc, dict) and "lat" in loc and (loc.get("lon") is not None or loc.get("lng") is not None):
+                    lon = loc.get("lon") if loc.get("lon") is not None else loc.get("lng", 0.0)
+                    loc_point = Point(float(lon), float(loc.get("lat", 0.0)))
                 else:
                     loc_point = Point(0.0, 0.0)
 
-                # Handle optional irrigation type
+                # Handle optional irrigation type (accept irrigation_type or irrigation_type_id)
                 irrigation_type = None
-                irrigation_type_id = irrigation_data.get("irrigation_type_id")
+                irrigation_type_id = irrigation_data.get("irrigation_type_id") or irrigation_data.get("irrigation_type")
                 if irrigation_type_id:
                     try:
                         irrigation_type = IrrigationType.objects.get(id=irrigation_type_id)

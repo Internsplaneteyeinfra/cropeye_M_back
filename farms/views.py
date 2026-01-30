@@ -309,22 +309,34 @@ class FarmViewSet(viewsets.ModelViewSet):
     def complete_registration(self, request):
         """
         Complete farmer registration - creates farmer, plots, farms, and irrigations.
-        
+        Pass farmer, plot, farm, and irrigation in the JSON body.
+
         Supports two formats:
-        1. Single plot:
+
+        1. Single plot (include plot location, boundary, and irrigation):
            {
-             "farmer": {...},
-             "plot": {...},
-             "farm": {...},
-             "irrigation": {...}
+             "farmer": { "phone_number", "email", "password", "first_name", "last_name", ... },
+             "plot": {
+               "gat_number", "plot_number", "village", "taluka", "district", "state", "country", "pin_code",
+               "location": { "lat": <number>, "lon": <number> },
+               "boundary": [[lon, lat], ...] or { "type": "Polygon", "coordinates": [[[lon, lat], ...]] }
+             },
+             "farm": { "address", "area_size", "soil_type", "crop_type", "crop_variety", ... },
+             "irrigation": {
+               "location": { "lat", "lon" },
+               "irrigation_type_id": 1,
+               "status": true,
+               "motor_horsepower", "pipe_width_inches", "distance_motor_to_plot_m",
+               "plants_per_acre", "flow_rate_lph", "emitters_count"
+             }
            }
-        
-        2. Multiple plots:
+
+        2. Multiple plots (each entry may include "irrigation"):
            {
              "farmer": {...},
              "plots": [
-               {"plot": {...}, "farm": {...}, "irrigation": {...}},
-               {"plot": {...}, "farm": {...}, "irrigation": {...}}
+               { "plot": {...}, "farm": {...}, "irrigation": {...} },
+               { "plot": {...}, "farm": {...}, "irrigation": {...} }
              ]
            }
         """

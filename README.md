@@ -201,6 +201,76 @@ SIMPLE_JWT = {
 - `PUT /api/farms/{id}/` - Update farm
 - `DELETE /api/farms/{id}/` - Delete farm
 
+### Complete farmer registration (single plot with irrigation)
+- `POST /api/farms/complete-registration/` - Create farmer, plot, farm, and irrigation in one call (no auth).
+
+Request body must include **farmer**, **plot** (with **location** lat/lon and **boundary**), **farm**, and **irrigation**:
+
+- **plot.location**: center point as `{ "lat": <number>, "lon": <number> }`.
+- **plot.boundary**: polygon in one of these formats:
+  - GeoJSON: `{ "type": "Polygon", "coordinates": [[[lon, lat], [lon, lat], ...]] }`
+  - Array of [lon, lat]: `[[lon, lat], [lon, lat], ...]`
+  - Array of objects: `[{ "lon": <number>, "lat": <number> }, ...]`  
+  (At least 4 points; first and last are auto-closed if needed.)
+
+```json
+{
+  "farmer": {
+    "phone_number": "9876543210",
+    "email": "farmer@example.com",
+    "password": "SecurePass123",
+    "first_name": "Test",
+    "last_name": "Farmer",
+    "address": "",
+    "village": "",
+    "district": "",
+    "state": "",
+    "taluka": ""
+  },
+  "plot": {
+    "gat_number": "GAT001",
+    "plot_number": "P1",
+    "village": "Test Village",
+    "taluka": "Taluka",
+    "district": "District",
+    "state": "State",
+    "country": "India",
+    "pin_code": "400001",
+    "location": { "lat": 18.5204, "lon": 73.8567 },
+    "boundary": [
+      [73.856, 18.520],
+      [73.858, 18.520],
+      [73.858, 18.522],
+      [73.856, 18.522],
+      [73.856, 18.520]
+    ]
+  },
+  "farm": {
+    "address": "Farm address",
+    "area_size": "2.5",
+    "soil_type": 1,
+    "crop_type": 1,
+    "crop_variety": "Co 86032",
+    "spacing_a": "1.5",
+    "spacing_b": "1.2",
+    "plantation_date": "2024-01-15"
+  },
+  "irrigation": {
+    "location": { "lat": 18.5, "lon": 73.8 },
+    "irrigation_type_id": 1,
+    "status": true,
+    "motor_horsepower": 5.0,
+    "pipe_width_inches": 2.0,
+    "distance_motor_to_plot_m": 50,
+    "plants_per_acre": 1200,
+    "flow_rate_lph": 4.0,
+    "emitters_count": 2
+  }
+}
+```
+
+Use valid IDs for `soil_type`, `crop_type`, and `irrigation_type_id` from your database. For multiple plots, send `"plots": [{ "plot": {...}, "farm": {...}, "irrigation": {...} }, ...]` instead of single `plot`/`farm`/`irrigation`.
+
 ### Tasks
 - `GET /api/tasks/` - List tasks
 - `POST /api/tasks/` - Create task
